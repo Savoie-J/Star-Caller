@@ -1,5 +1,6 @@
 import os
 import discord
+import asyncio
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -26,7 +27,8 @@ table_data = {
     "is_locked": False,  # Prevent updates when locked
     "entries": [],       # Holds all entries as rows
     "message_id": None,  # ID of the message containing the table
-    "channel_id": None   # ID of the channel where the table is posted
+    "channel_id": None,   # ID of the channel where the table is posted
+    "chunk_message_ids": []  # Add this line
 }
 
 # Original data
@@ -59,7 +61,7 @@ world_data = [
     (27, "Members"),
     (28, "Members"),
     (29, "Free-to-play"),
-    (30, "Members"),
+    (30, "Members", "Special"),
     (31, "Members"),
     (32, "Members"),
     (33, "Free-to-play"),
@@ -77,11 +79,11 @@ world_data = [
     (45, "Members"),
     (46, "Members"),
     (47, "Members"),
-    (48, "Members"),
+    (48, "Members", "Special"),
     (49, "Members"),
     (50, "Members"),
     (51, "Members"),
-    (52, "Members"),
+    (52, "Members", "Special"),
     (53, "Members"),
     (54, "Members"),
     (55, "Free-to-play"),
@@ -115,7 +117,7 @@ world_data = [
     (83, "Members"),
     (84, "Members"),
     (85, "Members"),
-    (86, "Members"),
+    (86, "Members", "Special"),
     (87, "Members"),
     (88, "Members"),
     (89, "Members"),
@@ -134,7 +136,7 @@ world_data = [
     (105, "Members"),
     (106, "Members"),
     (108, "Free-to-play"),
-    (114, "Members"),
+    (114, "Members", "Special"),
     (115, "Members"),
     (116, "Members"),
     (117, "Members"),
@@ -170,87 +172,138 @@ world_data = [
     (259, "Members"),
 ]
 
-# Create the three lists
-all_worlds = [world for world, _ in world_data]
-members_worlds = [world for world, status in world_data if status == "Members"]
-free_to_play_worlds = [world for world, status in world_data if status == "Free-to-play"]
+all_worlds = [world for world, *_ in world_data]
+members_worlds = [world for world, status, *_ in world_data if status == "Members"]
+free_to_play_worlds = [world for world, status, *_ in world_data if status == "Free-to-play"]
+special_worlds = [world for world, status, *rest in world_data if len(rest) > 0 and rest[0] == "Special"]
 
-
-@client.tree.command(name="create", description="Create an event table.")
+@client.tree.command(name="create", description="Create a star call table.")
 @app_commands.default_permissions(administrator=True)
 async def create(interaction: discord.Interaction):
-    """
-    Slash command to create a table with predefined columns:
-    World, Region, Size, Game Time.
-    The table is initially empty, and data is added using the `/call` command.
-    """
-    # Check if a table already exists
     if table_data["message_id"]:
         await interaction.response.send_message(
             "A table already exists. Use `/clear` to reset it.", ephemeral=True
         )
         return
 
-    # Define the table headers
-    table_headers = ["World", "Region", "Size", "Game Time"]
+    await interaction.response.defer(ephemeral=True)
 
-    # Prepare the table rows with blank spaces
     table_rows = []
     for world in all_worlds:
-        # Set text color based on the type of world (Free-to-Play or Member)
         world_name = world
         if world in free_to_play_worlds:
-            # Color the text for Free-to-Play worlds, you could also bold them or change their style
-            world_name = f"{world}"  # You can change this to color as needed
+            world_name = f"\u001b[33m{world}\u001b[0m" 
+        elif world in special_worlds:
+            world_name = f"\u001b[36m{world}\u001b[0m" 
         else:
             world_name = f"{world}"
 
-        # Add a row for this world
-        # We'll format the columns to make them more evenly spaced
         table_rows.append(
-            f"{world_name:<12}"
+            f"{world_name:<1} | {'?':<15} | {'s?':<3} | {'?':<4}"
         )
 
-    # Limit the number of rows per table message to avoid exceeding size limit
-    chunk_size = 50  # Adjust this if necessary
+    chunk_size = 9 
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
 
-    # Send multiple embeds if necessary
+    table_data["chunk_message_ids"] = []
+
     for i, chunk in enumerate(chunks):
-        # Format the full table
         formatted_table = "\n".join([f"{row}" for row in chunk])
 
-        # Create the embed with the table and headers
-        embed = discord.Embed(
-            title=f"Star Table {i + 1}",
-            description=(
-                f"{' | '.join(table_headers)}\n"  # Headers are only included once at the top
-                f"{'-' * 50}\n"  # Divider between header and rows
-                f"```{formatted_table}```"
-            ),
-            color=discord.Color.blue(),  # Embed color can be adjusted
-        )
-        embed.set_footer(text="Use /call to add details to the table!")
-
         try:
-            table_message = await interaction.channel.send(embed=embed)
-            table_data["message_id"] = table_message.id
-            table_data["channel_id"] = interaction.channel.id
-
-            # Initialize table entries as empty
-            table_data["entries"] = [
-                {"region": None, "size": None, "game_time": None}
-                for _ in all_worlds
-            ]
-
-            # Send an ephemeral response to the user confirming success
-            if i == 0:
-                await interaction.response.send_message("Table created successfully!", ephemeral=True)
-        except Exception as e:
-            # Send an ephemeral response indicating failure
-            await interaction.response.send_message(
-                f"Failed to create the table. Error: {str(e)}", ephemeral=True
+            table_message = await interaction.channel.send(
+                content=f"```ansi\n{formatted_table}\n```"
             )
 
-# Run the bot
+            # Save each chunk's message ID
+            table_data["chunk_message_ids"].append(table_message.id)
+
+            # Store the first message ID and channel ID only once
+            if i == 0:
+                table_data["message_id"] = table_message.id
+                table_data["channel_id"] = interaction.channel.id
+
+                # Initialize table entries with the 'world' key in the entries list
+                table_data["entries"] = [
+                    {"world": world, "region": "?", "size": "s?", "game_time": "?"} 
+                    for world in all_worlds
+                ]
+                #print(f"{table_data}")
+        except Exception as e:
+            # If sending fails, follow up with an error message
+            await interaction.followup.send(
+                f"Failed to create the table. Error: {str(e)}", 
+                ephemeral=True
+            )
+            return
+    await interaction.followup.send("Table(s) created successfully!", ephemeral=True)
+
+# Add region list
+REGIONS = [
+    "Asgarnia", "Falador", "Lumbridge", "Varrock", 
+    "Wilderness", "Karamja", "Misthalin", "Morytania", 
+    "Tirannwn", "Kandarin", "Zeah"
+]
+
+@client.tree.command(name="call", description="Update world details in the table.")
+async def call(interaction: discord.Interaction, world: int, region: str = None, size: int = None, game_time: int = None):
+    # Retrieve the stored table data
+    if not table_data.get("chunk_message_ids"):
+        await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
+        return
+
+    # Validate region if provided
+    if region and region not in REGIONS:
+        await interaction.response.send_message(f"Invalid region. Choose from: {', '.join(REGIONS)}", ephemeral=True)
+        return
+
+    # Locate the world row to update
+    world_index = None
+    for i, entry in enumerate(table_data["entries"]):
+        if entry["world"] == world:
+            world_index = i
+            break
+    
+    if world_index is None:
+        await interaction.response.send_message(f"World {world} not found.", ephemeral=True)
+        return
+
+    # Update the table entry with the new values
+    if region is not None:
+        table_data["entries"][world_index]["region"] = region
+    if size is not None:
+        table_data["entries"][world_index]["size"] = size
+    if game_time is not None:
+        table_data["entries"][world_index]["game_time"] = game_time
+
+    # Prepare chunks with updated table rows
+    chunk_size = 9
+    table_rows = []
+    for entry in table_data["entries"]:
+        world_name = entry["world"]
+        if entry["world"] in free_to_play_worlds:
+            world_name = f"\u001b[33m{world_name}\u001b[0m" 
+        elif entry["world"] in special_worlds:
+            world_name = f"\u001b[36m{world_name}\u001b[0m" 
+        
+        table_rows.append(
+            f"{world_name:<1} | {entry['region']:<15} | s{entry['size']:<3} | {entry['game_time']:<4}"
+        )
+
+    # Split into chunks
+    chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
+
+    channel = interaction.channel
+
+    # Update only the specific chunks containing the updated world
+    chunk_index = world_index // chunk_size
+    message_id = table_data["chunk_message_ids"][chunk_index]
+    message = await channel.fetch_message(message_id)
+    
+    updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
+    await message.edit(content=updated_chunk)
+
+    # Respond to the interaction
+    await interaction.response.send_message(f"Updated world {world} details.", ephemeral=True)
+
 client.run(token)
