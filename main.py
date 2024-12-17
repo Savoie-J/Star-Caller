@@ -1,6 +1,8 @@
 import os
 import discord
 import asyncio
+import datetime
+import pytz
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -11,27 +13,23 @@ token = os.getenv("token")
 class StarCaller(commands.Bot):
     def __init__(self):
         super().__init__(
-            command_prefix="",  # No prefix as we're using slash commands
+            command_prefix="", 
             intents=discord.Intents.all(),
         )
 
     async def setup_hook(self):
-        # Sync slash commands on startup
         await self.tree.sync()
-        #print("Commands synced!")
 
 client = StarCaller()
 
-# Table data to store event information
 table_data = {
-    "is_locked": False,  # Prevent updates when locked
-    "entries": [],       # Holds all entries as rows
-    "message_id": None,  # ID of the message containing the table
-    "channel_id": None,   # ID of the channel where the table is posted
-    "chunk_message_ids": []  # Add this line
+    "is_locked": False, 
+    "entries": [],      
+    "message_id": None, 
+    "channel_id": None,  
+    "chunk_message_ids": []  
 }
 
-# Original data
 world_data = [
     (1, "Members"),
     (2, "Members"),
@@ -199,10 +197,10 @@ async def create(interaction: discord.Interaction):
             world_name = f"{world}"
 
         table_rows.append(
-            f"{world_name:<1} | {'?':<15} | {'s?':<3} | {'?':<4}"
+            f"{world_name:<1} | {'?':<17} | {'s?':<4} | {'?':<4}"
         )
 
-    chunk_size = 9 
+    chunk_size = 32 
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
 
     table_data["chunk_message_ids"] = []
@@ -215,22 +213,17 @@ async def create(interaction: discord.Interaction):
                 content=f"```ansi\n{formatted_table}\n```"
             )
 
-            # Save each chunk's message ID
             table_data["chunk_message_ids"].append(table_message.id)
 
-            # Store the first message ID and channel ID only once
             if i == 0:
                 table_data["message_id"] = table_message.id
                 table_data["channel_id"] = interaction.channel.id
 
-                # Initialize table entries with the 'world' key in the entries list
                 table_data["entries"] = [
                     {"world": world, "region": "?", "size": "s?", "game_time": "?"} 
                     for world in all_worlds
                 ]
-                #print(f"{table_data}")
         except Exception as e:
-            # If sending fails, follow up with an error message
             await interaction.followup.send(
                 f"Failed to create the table. Error: {str(e)}", 
                 ephemeral=True
@@ -238,26 +231,50 @@ async def create(interaction: discord.Interaction):
             return
     await interaction.followup.send("Table(s) created successfully!", ephemeral=True)
 
-# Add region list
-REGIONS = [
-    "Asgarnia", "Falador", "Lumbridge", "Varrock", 
-    "Wilderness", "Karamja", "Misthalin", "Morytania", 
-    "Tirannwn", "Kandarin", "Zeah"
-]
 
-@client.tree.command(name="call", description="Update world details in the table.")
-async def call(interaction: discord.Interaction, world: int, region: str = None, size: int = None, game_time: int = None):
-    # Retrieve the stored table data
+
+@client.tree.command(name="call", description="Call-out shooting stars.")
+@app_commands.describe(
+    world = "What world will this star fall on?",
+    region = "What's the general location of the falling star?", 
+    size = "What size will the falling star be?",
+    game_time = "How many minutes from now will the star fall? (Use the lower bound)",
+    )
+@app_commands.choices(
+    region=[
+        app_commands.Choice(name="Asgarnia", value="Asgarnia"),
+        app_commands.Choice(name="Crandor", value="Crandor"),
+        app_commands.Choice(name="Karamja", value="Karamja"),
+        app_commands.Choice(name="Fremennik", value="Fremennik"),
+        app_commands.Choice(name="Lunar Isle", value="Lunar Isle"),
+        app_commands.Choice(name="Kandarin", value="Kandarin"),
+        app_commands.Choice(name="Kharidian Desert", value="Kharidian Desert"),
+        app_commands.Choice(name="Misthalin", value="Misthalin"),
+        app_commands.Choice(name="Morytania", value="Morytania"),
+        app_commands.Choice(name="Mos Le'Harmless", value="Mos Le'Harmless"),
+        app_commands.Choice(name="Piscatoris", value="Piscatoris"),
+        app_commands.Choice(name="Gnome Stronghold", value="Gnome Stronghold"),
+        app_commands.Choice(name="Tirannwn", value="Tirannwn"),
+        app_commands.Choice(name="Wilderness", value="Wilderness")
+    ],
+    size=[
+        app_commands.Choice(name="1", value="s1"),
+        app_commands.Choice(name="2", value="s2"),
+        app_commands.Choice(name="3", value="s3"),
+        app_commands.Choice(name="4", value="s4"),
+        app_commands.Choice(name="5", value="s5"),
+        app_commands.Choice(name="6", value="s6"),
+        app_commands.Choice(name="7", value="s7"),
+        app_commands.Choice(name="8", value="s8"),
+        app_commands.Choice(name="9", value="s9"),
+        app_commands.Choice(name="10", value="s10")
+    ]
+)
+async def call(interaction: discord.Interaction, world: int, region: str = None, size: str = None, game_time: int = None):
     if not table_data.get("chunk_message_ids"):
         await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
         return
 
-    # Validate region if provided
-    if region and region not in REGIONS:
-        await interaction.response.send_message(f"Invalid region. Choose from: {', '.join(REGIONS)}", ephemeral=True)
-        return
-
-    # Locate the world row to update
     world_index = None
     for i, entry in enumerate(table_data["entries"]):
         if entry["world"] == world:
@@ -268,16 +285,18 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
         await interaction.response.send_message(f"World {world} not found.", ephemeral=True)
         return
 
-    # Update the table entry with the new values
     if region is not None:
         table_data["entries"][world_index]["region"] = region
     if size is not None:
         table_data["entries"][world_index]["size"] = size
+    
     if game_time is not None:
-        table_data["entries"][world_index]["game_time"] = game_time
+        current_utc = datetime.datetime.now(pytz.UTC)
+        game_end_time = current_utc + datetime.timedelta(minutes=game_time)
+        formatted_time = game_end_time.strftime("%H:%M")
+        table_data["entries"][world_index]["game_time"] = formatted_time
 
-    # Prepare chunks with updated table rows
-    chunk_size = 9
+    chunk_size = 32
     table_rows = []
     for entry in table_data["entries"]:
         world_name = entry["world"]
@@ -287,15 +306,11 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
             world_name = f"\u001b[36m{world_name}\u001b[0m" 
         
         table_rows.append(
-            f"{world_name:<1} | {entry['region']:<15} | s{entry['size']:<3} | {entry['game_time']:<4}"
+            f"{world_name:<1} | {entry['region']:<17} | {entry['size']:<4} | {entry['game_time']:<4}"
         )
 
-    # Split into chunks
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
-
     channel = interaction.channel
-
-    # Update only the specific chunks containing the updated world
     chunk_index = world_index // chunk_size
     message_id = table_data["chunk_message_ids"][chunk_index]
     message = await channel.fetch_message(message_id)
@@ -303,7 +318,6 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
     updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
     await message.edit(content=updated_chunk)
 
-    # Respond to the interaction
     await interaction.response.send_message(f"Updated world {world} details.", ephemeral=True)
 
 client.run(token)
