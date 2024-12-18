@@ -24,7 +24,6 @@ class StarCaller(commands.Bot):
 
 client = StarCaller()
 
-# Initialize table_data with a method to load from file
 def load_table_data():
     try:
         with open(DATA_FILE, 'r') as f:
@@ -43,7 +42,6 @@ def save_table_data(data):
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f)
 
-# Load initial data
 table_data = load_table_data()
 
 world_data = [
@@ -192,9 +190,8 @@ free_to_play_worlds = [world for world, status, *_ in world_data if status == "F
 special_worlds = [world for world, status, *rest in world_data if len(rest) > 0 and rest[0] == "Special"]
 
 @client.tree.command(name="lock", description="Lock the star call table to prevent modifications.")
-@app_commands.default_permissions(administrator=True)
+@app_commands.default_permissions(manage_events=True)
 async def lock(interaction: discord.Interaction):
-    # Reload the current data from the file to ensure we have the most recent status
     current_table_data = load_table_data()
 
     if not current_table_data.get("message_id"):
@@ -205,16 +202,14 @@ async def lock(interaction: discord.Interaction):
         await interaction.response.send_message("Table is already locked.", ephemeral=True)
         return
     
-    # Update the global table_data and save to file
     table_data["is_locked"] = True
     save_table_data(table_data)
 
     await interaction.response.send_message("Star call table has been locked.", ephemeral=True)
 
 @client.tree.command(name="unlock", description="Unlock the star call table to allow modifications.")
-@app_commands.default_permissions(administrator=True)
+@app_commands.default_permissions(manage_events=True)
 async def unlock(interaction: discord.Interaction):
-    # Reload the current data from the file to ensure we have the most recent status
     current_table_data = load_table_data()
 
     if not current_table_data.get("message_id"):
@@ -225,14 +220,13 @@ async def unlock(interaction: discord.Interaction):
         await interaction.response.send_message("Table is already unlocked.", ephemeral=True)
         return
     
-    # Update the global table_data and save to file
     table_data["is_locked"] = False
     save_table_data(table_data)
 
     await interaction.response.send_message("Star call table has been unlocked.", ephemeral=True)
 
 @client.tree.command(name="clear", description="Clear all entries in the star call table.")
-@app_commands.default_permissions(administrator=True)
+@app_commands.default_permissions(manage_events=True)
 async def clear(interaction: discord.Interaction):
     if not table_data.get("chunk_message_ids"):
         await interaction.response.send_message("No table exists to clear.", ephemeral=True)
@@ -244,13 +238,11 @@ async def clear(interaction: discord.Interaction):
 
     await interaction.response.defer(ephemeral=True)
 
-    # Reset entries to default state
     table_data["entries"] = [
         {"world": world, "region": "", "size": "", "game_time": ""} 
         for world in all_worlds
     ]
 
-    # Recreate the table with default entries
     table_rows = []
     for entry in table_data["entries"]:
         world_name = entry["world"]
@@ -268,7 +260,6 @@ async def clear(interaction: discord.Interaction):
     chunk_size = 32
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
 
-    # Update each chunk message
     channel = interaction.client.get_channel(table_data["channel_id"])
     for i, chunk in enumerate(chunks):
         message_id = table_data["chunk_message_ids"][i]
@@ -277,18 +268,16 @@ async def clear(interaction: discord.Interaction):
         updated_chunk = "```ansi\n" + "\n".join(chunk) + "```"
         await message.edit(content=updated_chunk)
 
-    # Reset table metadata
     table_data["message_id"] = None
     table_data["channel_id"] = None
     table_data["chunk_message_ids"] = []
     
-    # Save the cleared data
     save_table_data(table_data)
 
     await interaction.followup.send("Table cleared successfully!", ephemeral=True)
 
 @client.tree.command(name="prune", description="Clear data for a specific world.")
-@app_commands.default_permissions(administrator=True)
+@app_commands.default_permissions(manage_events=True)
 async def prune(interaction: discord.Interaction, world: int):
     if not table_data.get("chunk_message_ids"):
         await interaction.response.send_message("No table exists to prune.", ephemeral=True)
@@ -308,12 +297,10 @@ async def prune(interaction: discord.Interaction, world: int):
         await interaction.response.send_message(f"World {world} not found.", ephemeral=True)
         return
 
-    # Reset the specific world's entry
     table_data["entries"][world_index] = {
         "world": world, "region": "", "size": "", "game_time": ""
     }
 
-    # Recreate table rows with updated entry
     table_rows = []
     for entry in table_data["entries"]:
         world_name = entry["world"]
@@ -331,7 +318,6 @@ async def prune(interaction: discord.Interaction, world: int):
     chunk_size = 32
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
 
-    # Determine which chunk contains the world and update that specific message
     chunk_index = world_index // chunk_size
     channel = interaction.client.get_channel(table_data["channel_id"])
     message_id = table_data["chunk_message_ids"][chunk_index]
@@ -340,7 +326,6 @@ async def prune(interaction: discord.Interaction, world: int):
     updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
     await message.edit(content=updated_chunk)
 
-    # Save the updated data
     save_table_data(table_data)
 
     await interaction.response.send_message(f"Cleared data for world {world}.", ephemeral=True)
@@ -348,10 +333,8 @@ async def prune(interaction: discord.Interaction, world: int):
 @client.tree.command(name="create", description="Create a star call table.")
 @app_commands.default_permissions(administrator=True)
 async def create(interaction: discord.Interaction):
-    # If a message_id exists, check if the message is still valid
     if table_data["message_id"]:
         try:
-            # Try to fetch the existing message
             channel = interaction.client.get_channel(table_data["channel_id"])
             if channel:
                 try:
@@ -362,10 +345,8 @@ async def create(interaction: discord.Interaction):
                     )
                     return
                 except discord.NotFound:
-                    # If message is deleted, we'll proceed to create a new one
                     pass
         except Exception:
-            # If channel is not accessible, proceed to create
             pass
 
     await interaction.response.defer(ephemeral=True)
@@ -403,7 +384,6 @@ async def create(interaction: discord.Interaction):
                 table_data["message_id"] = table_message.id
                 table_data["channel_id"] = interaction.channel.id
 
-                # If we had previous entries, restore them
                 if not table_data["entries"]:
                     table_data["entries"] = [
                         {"world": world, "region": "", "size": "", "game_time": ""} 
@@ -416,7 +396,6 @@ async def create(interaction: discord.Interaction):
             )
             return
     
-    # Save the updated table data
     save_table_data(table_data)
     
     await interaction.followup.send("Table(s) created successfully!", ephemeral=True)
@@ -459,17 +438,14 @@ async def create(interaction: discord.Interaction):
     ]
 )
 async def call(interaction: discord.Interaction, world: int, region: str = None, size: str = None, game_time: int = None):
-    # Check if a table has been created at all
     if not table_data.get("message_id"):
         await interaction.response.send_message("No table exists. Use `/create` first.", ephemeral=True)
         return
 
-    # Check if table is locked
     if table_data["is_locked"]:
         await interaction.response.send_message("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
         return
 
-    # Validate world
     world_index = None
     for i, entry in enumerate(table_data["entries"]):
         if entry["world"] == world:
@@ -480,7 +456,6 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
         await interaction.response.send_message(f"World `{world}` not found.", ephemeral=True)
         return
 
-    # Update entry
     if region is not None:
         table_data["entries"][world_index]["region"] = region
     if size is not None:
@@ -492,10 +467,8 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
         formatted_time = game_end_time.strftime("%H:%M")
         table_data["entries"][world_index]["game_time"] = formatted_time
 
-    # Get the original table's channel
     channel = interaction.client.get_channel(table_data["channel_id"])
     
-    # Prepare table rows
     table_rows = []
     for entry in table_data["entries"]:
         world_name = entry["world"]
@@ -510,7 +483,6 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
             f"{world_name:<1} {entry['region']:<17} {entry['size']:<4} {entry['game_time']:<4}"
         )
 
-    # Update table
     chunk_size = 32
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
     
@@ -521,13 +493,9 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
     updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
     await message.edit(content=updated_chunk)
 
-    # Save updated data
     save_table_data(table_data)
 
     await interaction.response.send_message(f"Spotted a star-fall on world `{world}`!")
-
-#add search-size command which takes a size input 1-10 and outputs all stars of that size.
-#also add search-region
 
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
@@ -535,7 +503,6 @@ async def find(interaction: discord.Interaction):
         await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
         return
 
-    # Filter out entries that have a valid size and are not the default "s?"
     valid_entries = [
         entry for entry in table_data["entries"] 
         if entry['size'] != "" and 
@@ -547,27 +514,22 @@ async def find(interaction: discord.Interaction):
         await interaction.response.send_message("No stars have been called yet.", ephemeral=True)
         return
 
-    # Extract the numeric size from the size string
     def extract_size(entry):
         return int(entry['size'][1:])
 
-    # Find the maximum star size
     max_size = max(extract_size(entry) for entry in valid_entries)
 
-    # Collect all entries with the maximum size
     highest_stars = [
         entry for entry in valid_entries 
         if extract_size(entry) == max_size
     ]
 
-    # Format the output message
     star_details = []
     for star in highest_stars:
         star_details.append(
             f"World `{star['world']}` in `{star['region']}` at `{star['game_time']}`."
         )
 
-    # Send the ephemeral message
     await interaction.response.send_message(
         f"Largest star(s) called is of size `{max_size}`:\n" + 
         "\n".join(star_details),
@@ -595,7 +557,6 @@ async def find_size(interaction: discord.Interaction, size: str):
         await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
         return
 
-    # Filter out entries that have a valid size matching the input and have all details filled
     valid_entries = [
         entry for entry in table_data["entries"] 
         if entry['size'] == size and 
@@ -607,14 +568,12 @@ async def find_size(interaction: discord.Interaction, size: str):
         await interaction.response.send_message(f"No stars of size `{size[1:]}` have been called yet.", ephemeral=True)
         return
 
-    # Format the output message
     star_details = []
     for star in valid_entries:
         star_details.append(
             f"World `{star['world']}` in `{star['region']}` at `{star['game_time']}`."
         )
 
-    # Send the ephemeral message
     await interaction.response.send_message(
         f"Star(s) of size `{size[1:]}` called:\n" + 
         "\n".join(star_details),
@@ -646,7 +605,6 @@ async def find_region(interaction: discord.Interaction, region: str):
         await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
         return
 
-    # Filter out entries that have a valid region matching the input and have all details filled
     valid_entries = [
         entry for entry in table_data["entries"] 
         if entry['region'] == region and 
@@ -658,14 +616,12 @@ async def find_region(interaction: discord.Interaction, region: str):
         await interaction.response.send_message(f"No stars in `{region}` have been called yet.", ephemeral=True)
         return
 
-    # Format the output message
     star_details = []
     for star in valid_entries:
         star_details.append(
             f"World `{star['world']}` of size `{star['size'][1:]}` at `{star['game_time']}`."
         )
 
-    # Send the ephemeral message
     await interaction.response.send_message(
         f"Star(s) called for `{region}`:\n" + 
         "\n".join(star_details),
