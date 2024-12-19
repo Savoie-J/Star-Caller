@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import json
 import pytz
+from datetime import timezone
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -578,6 +579,8 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
 
 #add relative time to the find commands output
 
+import datetime
+
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
     if not table_data.get("chunk_message_ids"):
@@ -607,8 +610,17 @@ async def find(interaction: discord.Interaction):
 
     star_details = []
     for star in highest_stars:
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
+                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
+            )
+            game_time_unix = int(game_time.timestamp())
+        except ValueError:
+            game_time_unix = "Invalid time format"
+
         star_details.append(
-            f"World `{star['world']}` in `{star['region']}` at `{star['game_time']}`."
+            f"World `{star['world']}` - `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
@@ -651,8 +663,17 @@ async def find_size(interaction: discord.Interaction, size: str):
 
     star_details = []
     for star in valid_entries:
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
+                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
+            )
+            game_time_unix = int(game_time.timestamp())
+        except ValueError:
+            game_time_unix = "Invalid time format"
+
         star_details.append(
-            f"World `{star['world']}` in `{star['region']}` at `{star['game_time']}`."
+            f"World `{star['world']}` `{star['region']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
@@ -706,8 +727,17 @@ async def find_region(interaction: discord.Interaction, region: str):
 
     star_details = []
     for star in valid_entries:
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
+                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
+            )
+            game_time_unix = int(game_time.timestamp())
+        except ValueError:
+            game_time_unix = "Invalid time format"
+
         star_details.append(
-            f"World `{star['world']}` of size `{star['size'][1:]}` at `{star['game_time']}`."
+            f" Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
