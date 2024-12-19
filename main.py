@@ -62,20 +62,24 @@ def check_authorized_server():
 @client.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.errors.CheckFailure):
-        # If we haven't responded to the interaction yet, send a response
         if not interaction.response.is_done():
             await interaction.response.send_message(
                 "You are not authorized to use this command.", 
                 ephemeral=True
             )
     else:
-        # Handle other types of errors or raise them
-        print(f"An error occurred: {str(error)}")
+        print(f"Slash command error occurred: {str(error)}")
         if not interaction.response.is_done():
             await interaction.response.send_message(
                 "An error occurred while processing the command.", 
                 ephemeral=True
             )
+
+@client.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    print(f"Message command error occurred: {str(error)}")
 
 table_data = load_table_data()
 
