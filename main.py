@@ -315,7 +315,7 @@ async def clear(interaction: discord.Interaction):
     await interaction.followup.send("Table cleared successfully!", ephemeral=True)
 
 @client.tree.command(name="prune", description="Clear data for a specific world.")
-@app_commands.describe(region="What world do you plan to prune entries for?")
+@app_commands.describe(world="What world do you plan to prune entries for?")
 @app_commands.default_permissions(manage_events=True)
 @check_authorized_server()
 async def prune(interaction: discord.Interaction, world: int):
