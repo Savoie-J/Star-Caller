@@ -12,6 +12,12 @@ load_dotenv()
 token = os.getenv("token")
 DATA_FILE = "star_caller_data.json"
 
+AUTHORIZED_SERVER_IDS = [
+    1274620800896339968,  #dev1
+    1298696232251949116,  #dev2
+    282907227017183232,   #star-find
+]
+
 class StarCaller(commands.Bot):
     def __init__(self):
         super().__init__(
@@ -41,6 +47,35 @@ def load_table_data():
 def save_table_data(data):
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f)
+
+def check_authorized_server():
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if interaction.guild_id not in AUTHORIZED_SERVER_IDS:
+            await interaction.response.send_message(
+                "This command can only be used in authorized servers.", 
+                ephemeral=True
+            )
+            return False
+        return True
+    return app_commands.check(predicate)
+
+@client.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.errors.CheckFailure):
+        # If we haven't responded to the interaction yet, send a response
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "You are not authorized to use this command.", 
+                ephemeral=True
+            )
+    else:
+        # Handle other types of errors or raise them
+        print(f"An error occurred: {str(error)}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "An error occurred while processing the command.", 
+                ephemeral=True
+            )
 
 table_data = load_table_data()
 
@@ -191,6 +226,7 @@ special_worlds = [world for world, status, *rest in world_data if len(rest) > 0 
 
 @client.tree.command(name="lock", description="Lock the star call table to prevent modifications.")
 @app_commands.default_permissions(manage_events=True)
+@check_authorized_server()
 async def lock(interaction: discord.Interaction):
     current_table_data = load_table_data()
 
@@ -209,6 +245,7 @@ async def lock(interaction: discord.Interaction):
 
 @client.tree.command(name="unlock", description="Unlock the star call table to allow modifications.")
 @app_commands.default_permissions(manage_events=True)
+@check_authorized_server()
 async def unlock(interaction: discord.Interaction):
     current_table_data = load_table_data()
 
@@ -227,6 +264,7 @@ async def unlock(interaction: discord.Interaction):
 
 @client.tree.command(name="clear", description="Clear all entries in the star call table.")
 @app_commands.default_permissions(manage_events=True)
+@check_authorized_server()
 async def clear(interaction: discord.Interaction):
     if not table_data.get("chunk_message_ids"):
         await interaction.response.send_message("No table exists to clear.", ephemeral=True)
@@ -277,7 +315,9 @@ async def clear(interaction: discord.Interaction):
     await interaction.followup.send("Table cleared successfully!", ephemeral=True)
 
 @client.tree.command(name="prune", description="Clear data for a specific world.")
+@app_commands.describe(region="What world do you plan to prune entries for?")
 @app_commands.default_permissions(manage_events=True)
+@check_authorized_server()
 async def prune(interaction: discord.Interaction, world: int):
     if not table_data.get("chunk_message_ids"):
         await interaction.response.send_message("No table exists to prune.", ephemeral=True)
@@ -332,6 +372,7 @@ async def prune(interaction: discord.Interaction, world: int):
 
 @client.tree.command(name="create", description="Create a star call table.")
 @app_commands.default_permissions(administrator=True)
+@check_authorized_server()
 async def create(interaction: discord.Interaction):
     if table_data["message_id"]:
         try:
@@ -409,19 +450,26 @@ async def create(interaction: discord.Interaction):
     )
 @app_commands.choices(
     region=[
+        app_commands.Choice(name="Anachronia", value="Anachronia"),
         app_commands.Choice(name="Asgarnia", value="Asgarnia"),
+        app_commands.Choice(name="Ashdale", value="Ashdale"),
         app_commands.Choice(name="Crandor", value="Crandor"),
         app_commands.Choice(name="Karamja", value="Karamja"),
+        app_commands.Choice(name="Daemonheim", value="Daemonheim"),
+        app_commands.Choice(name="Feldip Hills", value="Feldip Hills"),
         app_commands.Choice(name="Fremennik", value="Fremennik"),
         app_commands.Choice(name="Lunar Isle", value="Lunar Isle"),
         app_commands.Choice(name="Kandarin", value="Kandarin"),
         app_commands.Choice(name="Kharidian Desert", value="Kharidian Desert"),
+        app_commands.Choice(name="Lost Grove", value="Lost Grove"),
+        app_commands.Choice(name="Menaphos", value="Menaphos"),
         app_commands.Choice(name="Misthalin", value="Misthalin"),
         app_commands.Choice(name="Morytania", value="Morytania"),
         app_commands.Choice(name="Mos Le'Harmless", value="Mos Le'Harmless"),
         app_commands.Choice(name="Piscatoris", value="Piscatoris"),
         app_commands.Choice(name="Gnome Stronghold", value="Gnome Stronghold"),
         app_commands.Choice(name="Tirannwn", value="Tirannwn"),
+        app_commands.Choice(name="Tuska", value="Tuska"),
         app_commands.Choice(name="Wilderness", value="Wilderness")
     ],
     size=[
@@ -584,19 +632,26 @@ async def find_size(interaction: discord.Interaction, size: str):
 @app_commands.describe(region="What region are you looking for stars in?")
 @app_commands.choices(
     region=[
+        app_commands.Choice(name="Anachronia", value="Anachronia"),
         app_commands.Choice(name="Asgarnia", value="Asgarnia"),
+        app_commands.Choice(name="Ashdale", value="Ashdale"),
         app_commands.Choice(name="Crandor", value="Crandor"),
         app_commands.Choice(name="Karamja", value="Karamja"),
+        app_commands.Choice(name="Daemonheim", value="Daemonheim"),
+        app_commands.Choice(name="Feldip Hills", value="Feldip Hills"),
         app_commands.Choice(name="Fremennik", value="Fremennik"),
         app_commands.Choice(name="Lunar Isle", value="Lunar Isle"),
         app_commands.Choice(name="Kandarin", value="Kandarin"),
         app_commands.Choice(name="Kharidian Desert", value="Kharidian Desert"),
+        app_commands.Choice(name="Lost Grove", value="Lost Grove"),
+        app_commands.Choice(name="Menaphos", value="Menaphos"),
         app_commands.Choice(name="Misthalin", value="Misthalin"),
         app_commands.Choice(name="Morytania", value="Morytania"),
         app_commands.Choice(name="Mos Le'Harmless", value="Mos Le'Harmless"),
         app_commands.Choice(name="Piscatoris", value="Piscatoris"),
         app_commands.Choice(name="Gnome Stronghold", value="Gnome Stronghold"),
         app_commands.Choice(name="Tirannwn", value="Tirannwn"),
+        app_commands.Choice(name="Tuska", value="Tuska"),
         app_commands.Choice(name="Wilderness", value="Wilderness")
     ]
 )
