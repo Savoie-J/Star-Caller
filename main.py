@@ -311,40 +311,60 @@ async def clear(interaction: discord.Interaction):
 
     chunk_size = 32
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
-
     channel = interaction.client.get_channel(table_data["channel_id"])
-    
     total_chunks = len(chunks)
-    last_update_time = 0
-    
-    for i, chunk in enumerate(chunks):
+
+    async def process_chunk(chunk_index: int, chunk: list, retry_after: float = 0) -> float:
+        if retry_after > 0:
+            await asyncio.sleep(retry_after)
+            
         try:
-            message_id = table_data["chunk_message_ids"][i]
+            message_id = table_data["chunk_message_ids"][chunk_index]
             message = await channel.fetch_message(message_id)
             
             updated_chunk = "```ansi\n" + "\n".join(chunk) + "```"
             await message.edit(content=updated_chunk)
             
-            if i < total_chunks - 1:  
-                await asyncio.sleep(1)
+            return 0.5
             
-            current_time = asyncio.get_event_loop().time()
-            if (i + 1) % 5 == 0 or i == total_chunks - 1:  
-                if current_time - last_update_time >= 1: 
-                    progress = f"Clearing table... ({i + 1}/{total_chunks} chunks)"
+        except discord.HTTPException as e:
+            if e.code == 429:
+                retry_after = float(e.response.headers.get('Retry-After', 5))
+                print(f"Rate limited, waiting {retry_after} seconds")
+                return retry_after
+            else:
+                print(f"Error editing message {chunk_index}: {e}")
+                return 1.0  
+                
+        except Exception as e:
+            print(f"Unexpected error processing chunk {chunk_index}: {e}")
+            return 2.0  
+
+    last_update_time = 0
+    current_delay = 3 
+
+    for i, chunk in enumerate(chunks):
+        current_time = asyncio.get_event_loop().time()
+        if (i + 1) % 5 == 0 or i == total_chunks - 1:
+            if current_time - last_update_time >= 1:
+                progress = f"Clearing table... ({i + 1}/{total_chunks} chunks)"
+                try:
                     await progress_message.edit(content=progress)
                     last_update_time = current_time
-                
-        except discord.HTTPException as e:
-            print(f"Error editing message {i}: {e}")
-            if e.code == 429:  # Rate limit error code
-                await asyncio.sleep(2)
-                continue
-    
-    save_table_data(table_data)
+                except discord.HTTPException:
+                    pass  
+        
+        current_delay = await process_chunk(i, chunk, current_delay)
+        
+        if i < total_chunks - 1:
+            await asyncio.sleep(max(0.5, min(current_delay, 5.0)))
 
-    # Final success message
-    await progress_message.edit(content="Table cleared successfully!")
+    save_table_data(table_data)
+    
+    try:
+        await progress_message.edit(content="Table cleared successfully!")
+    except discord.HTTPException:
+        pass
 
 @client.tree.command(name="prune", description="Clear data for a specific world.")
 @app_commands.describe(world="What world do you plan to prune entries for?")
@@ -473,6 +493,9 @@ async def create(interaction: discord.Interaction):
     
     await interaction.followup.send("Table(s) created successfully!", ephemeral=True)
 
+#change how we do time or add a different input option, maybe check the length of the submission
+    #if the submission is 4 numbers long, treat it as a utc timecode
+
 @client.tree.command(name="call", description="Call-out shooting stars.")
 @app_commands.describe(
     world = "What world will this star fall on?",
@@ -507,14 +530,17 @@ async def create(interaction: discord.Interaction):
     size=[
         app_commands.Choice(name="1", value="s1"),
         app_commands.Choice(name="2", value="s2"),
-        app_commands.Choice(name="3", value="s3"),
+        app_commands.Choice(name="3", value="s3"),        
         app_commands.Choice(name="4", value="s4"),
         app_commands.Choice(name="5", value="s5"),
         app_commands.Choice(name="6", value="s6"),
         app_commands.Choice(name="7", value="s7"),
         app_commands.Choice(name="8", value="s8"),
         app_commands.Choice(name="9", value="s9"),
-        app_commands.Choice(name="10", value="s10")
+        app_commands.Choice(name="10", value="s10"),
+        app_commands.Choice(name="Small", value="sm"),
+        app_commands.Choice(name="Average", value="avg"),
+        app_commands.Choice(name="Big", value="big"),
     ]
 )
 async def call(interaction: discord.Interaction, world: int, region: str = None, size: str = None, game_time: int = None):
@@ -577,10 +603,6 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
 
     await interaction.response.send_message(f"Spotted a star-fall on world `{world}`!")
 
-#add relative time to the find commands output
-
-import datetime
-
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
     if not table_data.get("chunk_message_ids"):
@@ -620,7 +642,7 @@ async def find(interaction: discord.Interaction):
             game_time_unix = "Invalid time format"
 
         star_details.append(
-            f"World `{star['world']}` - `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
