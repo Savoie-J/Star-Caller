@@ -543,7 +543,7 @@ async def create(interaction: discord.Interaction):
         app_commands.Choice(name="Big", value="big"),
     ]
 )
-async def call(interaction: discord.Interaction, world: int, region: str = None, size: str = None, game_time: int = None):
+async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: int):
     if not table_data.get("message_id"):
         await interaction.response.send_message("No table exists. Use `/create` first.", ephemeral=True)
         return
