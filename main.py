@@ -27,6 +27,10 @@ class StarCaller(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
+    async def on_ready(self):
+        await self.change_presence(
+            activity=discord.CustomActivity(name="invoke /call to spot a star!")
+        )
 
 client = StarCaller()
 
