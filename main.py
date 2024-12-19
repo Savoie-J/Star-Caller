@@ -284,6 +284,11 @@ async def clear(interaction: discord.Interaction):
 
     await interaction.response.defer(ephemeral=True)
 
+    progress_message = await interaction.followup.send(
+        "Starting table clear... (0/5 chunks)", 
+        ephemeral=True
+    )
+
     table_data["entries"] = [
         {"world": world, "region": "", "size": "", "game_time": ""} 
         for world in all_worlds
@@ -307,20 +312,38 @@ async def clear(interaction: discord.Interaction):
     chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
 
     channel = interaction.client.get_channel(table_data["channel_id"])
+    
+    total_chunks = len(chunks)
+    last_update_time = 0
+    
     for i, chunk in enumerate(chunks):
-        message_id = table_data["chunk_message_ids"][i]
-        message = await channel.fetch_message(message_id)
-        
-        updated_chunk = "```ansi\n" + "\n".join(chunk) + "```"
-        await message.edit(content=updated_chunk)
-
-    table_data["message_id"] = None
-    table_data["channel_id"] = None
-    table_data["chunk_message_ids"] = []
+        try:
+            message_id = table_data["chunk_message_ids"][i]
+            message = await channel.fetch_message(message_id)
+            
+            updated_chunk = "```ansi\n" + "\n".join(chunk) + "```"
+            await message.edit(content=updated_chunk)
+            
+            if i < total_chunks - 1:  
+                await asyncio.sleep(1)
+            
+            current_time = asyncio.get_event_loop().time()
+            if (i + 1) % 5 == 0 or i == total_chunks - 1:  
+                if current_time - last_update_time >= 1: 
+                    progress = f"Clearing table... ({i + 1}/{total_chunks} chunks)"
+                    await progress_message.edit(content=progress)
+                    last_update_time = current_time
+                
+        except discord.HTTPException as e:
+            print(f"Error editing message {i}: {e}")
+            if e.code == 429:  # Rate limit error code
+                await asyncio.sleep(2)
+                continue
     
     save_table_data(table_data)
 
-    await interaction.followup.send("Table cleared successfully!", ephemeral=True)
+    # Final success message
+    await progress_message.edit(content="Table cleared successfully!")
 
 @client.tree.command(name="prune", description="Clear data for a specific world.")
 @app_commands.describe(world="What world do you plan to prune entries for?")
@@ -552,6 +575,8 @@ async def call(interaction: discord.Interaction, world: int, region: str = None,
     save_table_data(table_data)
 
     await interaction.response.send_message(f"Spotted a star-fall on world `{world}`!")
+
+#add relative time to the find commands output
 
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
