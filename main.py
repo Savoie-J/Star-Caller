@@ -779,7 +779,7 @@ async def find_region(interaction: discord.Interaction, region: str):
             game_time_unix = "Invalid time format"
 
         star_details.append(
-            f" Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
