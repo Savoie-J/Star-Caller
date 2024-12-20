@@ -65,6 +65,9 @@ def check_authorized_server():
         return True
     return app_commands.check(predicate)
 
+def is_valid_size(size_value):
+        return size_value.startswith('s') and size_value[1:].isdigit()
+
 @client.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.errors.CheckFailure):
@@ -494,9 +497,6 @@ async def create(interaction: discord.Interaction):
     
     await interaction.followup.send("Table(s) created successfully!", ephemeral=True)
 
-#change how we do time or add a different input option, maybe check the length of the submission
-    #if the submission is 4 numbers long, treat it as a utc timecode
-
 @client.tree.command(name="call", description="Call-out shooting stars.")
 @app_commands.describe(
     world = "What world will this star fall on?",
@@ -504,6 +504,7 @@ async def create(interaction: discord.Interaction):
     size = "What size will the falling star be?",
     game_time = "How many minutes from now will the star fall? (Use the lower bound)",
     )
+@app_commands.rename(game_time="relative-time")
 @app_commands.choices(
     region=[
         app_commands.Choice(name="Anachronia", value="Anachronia"),
@@ -544,7 +545,7 @@ async def create(interaction: discord.Interaction):
         app_commands.Choice(name="Big", value="big"),
     ]
 )
-async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: int):
+async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
     try:
         if not table_data.get("message_id"):
             await interaction.response.send_message("No table exists. Use `/create` first.", ephemeral=True)
@@ -610,8 +611,20 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
 
         save_table_data(table_data)
 
-        await interaction.response.send_message(f"Spotted a star-fall on world `{world}`!")
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            game_time = datetime.datetime.strptime(entry_updates["game_time"], "%H:%M").replace(
+                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
+            )
+            game_time_unix = int(game_time.timestamp())
+        except ValueError:
+            game_time_unix = "Invalid time format"
 
+        await interaction.response.send_message(
+            f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
+            f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
+        )
+        
     except Exception as e:
         error_message = f"An error occurred: {str(e)}"
         if not interaction.response.is_done():
@@ -624,9 +637,6 @@ async def find(interaction: discord.Interaction):
     if not table_data.get("chunk_message_ids"):
         await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
         return
-
-    def is_valid_size(size_value):
-        return size_value.startswith('s') and size_value[1:].isdigit()
 
     valid_entries = [
         entry for entry in table_data["entries"]
@@ -696,7 +706,8 @@ async def find_size(interaction: discord.Interaction, size: str):
         entry for entry in table_data["entries"] 
         if entry['size'] == size and 
            entry['region'] != "" and 
-           entry['game_time'] != ""
+           entry['game_time'] != "" and
+           is_valid_size(entry['size'])
     ]
 
     if not valid_entries:
