@@ -642,7 +642,7 @@ async def find(interaction: discord.Interaction):
     ]
 
     if not valid_entries:
-        await interaction.response.send_message("No stars have been called yet.")
+        await interaction.response.send_message("No stars have been fully called yet.")
         return
 
     def extract_size(entry):
@@ -705,7 +705,7 @@ async def find_size(interaction: discord.Interaction, size: str):
     ]
 
     if not valid_entries:
-        await interaction.response.send_message(f"No stars of size `{size[1:]}` have been called yet.", ephemeral=True)
+        await interaction.response.send_message(f"No stars of size `{size[1:]}` have been fully called yet.", ephemeral=True)
         return
 
     star_details = []
@@ -760,11 +760,12 @@ async def find_region(interaction: discord.Interaction, region: str):
         entry for entry in table_data["entries"] 
         if entry['region'] == region and 
            entry['size'] != "" and 
-           entry['game_time'] != ""
+           entry['game_time'] != "" and
+           is_valid_size(entry['size'])
     ]
 
     if not valid_entries:
-        await interaction.response.send_message(f"No stars in `{region}` have been called yet.", ephemeral=True)
+        await interaction.response.send_message(f"No stars in `{region}` have been fully called yet.", ephemeral=True)
         return
 
     star_details = []
@@ -784,6 +785,62 @@ async def find_region(interaction: discord.Interaction, region: str):
 
     await interaction.response.send_message(
         f"Star(s) called for `{region}`:\n" + 
+        "\n".join(star_details),
+        ephemeral=True
+    )
+
+@client.tree.command(name="find-world", description="Find stars on a specific world.")
+@app_commands.describe(world="What world are you looking for stars in?")
+async def find_world(interaction: discord.Interaction, world: int):
+    if not table_data.get("chunk_message_ids"):
+        await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
+        return
+    
+    if not any(entry["world"] == world for entry in table_data["entries"]):
+        await interaction.response.send_message(f"World `{world}` not found.", ephemeral=True)
+        return
+
+    valid_entries = [
+        entry for entry in table_data["entries"]
+        if entry['world'] == world and
+        entry['size'] != "" and
+        entry['region'] != "" and
+        entry['game_time'] != "" and
+        is_valid_size(entry['size'])
+    ]
+
+    if not valid_entries:  
+        await interaction.response.send_message(
+            f"No stars have been called on world `{world}`.", 
+            ephemeral=True
+        )
+        return
+
+    star_details = []
+    for star in valid_entries:
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
+                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
+            )
+            game_time_unix = int(game_time.timestamp())
+        except ValueError:
+            game_time_unix = "Invalid time format"
+
+        world_status = ""
+        if world in free_to_play_worlds:
+            world_status = " (Free-to-play)"
+        elif world in special_worlds:
+            world_status = " (Special)"
+        else:
+            world_status = " (Members)"
+
+        star_details.append(
+            f"Size `{star['size'][1:]}` in `{star['region']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
+        )
+
+    await interaction.response.send_message(
+        f"World `{world}`{world_status}:\n" +
         "\n".join(star_details),
         ephemeral=True
     )
