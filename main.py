@@ -530,6 +530,9 @@ async def create(interaction: discord.Interaction):
         app_commands.Choice(name="Wilderness", value="Wilderness")
     ],
     size=[
+        app_commands.Choice(name="Small", value="sm"),
+        app_commands.Choice(name="Average", value="avg"),
+        app_commands.Choice(name="Big", value="big"),
         app_commands.Choice(name="1", value="s1"),
         app_commands.Choice(name="2", value="s2"),
         app_commands.Choice(name="3", value="s3"),        
@@ -540,9 +543,6 @@ async def create(interaction: discord.Interaction):
         app_commands.Choice(name="8", value="s8"),
         app_commands.Choice(name="9", value="s9"),
         app_commands.Choice(name="10", value="s10"),
-        app_commands.Choice(name="Small", value="sm"),
-        app_commands.Choice(name="Average", value="avg"),
-        app_commands.Choice(name="Big", value="big"),
     ]
 )
 async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
@@ -624,7 +624,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
             f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
         )
-        
+
     except Exception as e:
         error_message = f"An error occurred: {str(e)}"
         if not interaction.response.is_done():
@@ -647,7 +647,7 @@ async def find(interaction: discord.Interaction):
     ]
 
     if not valid_entries:
-        await interaction.response.send_message("No stars have been called yet.", ephemeral=True)
+        await interaction.response.send_message("No stars have been called yet.")
         return
 
     def extract_size(entry):
@@ -677,8 +677,7 @@ async def find(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         f"Largest star(s) called is of size `{max_size}`:\n" + 
-        "\n".join(star_details),
-        ephemeral=True
+        "\n".join(star_details)
     )
 
 @client.tree.command(name="find-size", description="Find stars of a specific size.")
