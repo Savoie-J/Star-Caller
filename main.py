@@ -68,6 +68,26 @@ def check_authorized_server():
 def is_valid_size(size_value):
         return size_value.startswith('s') and size_value[1:].isdigit()
 
+def calculate_game_time(time_input):
+    try:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        
+        if isinstance(time_input, str):
+            time_parts = time_input.split(":")
+            hours, minutes = map(int, time_parts)
+            
+            game_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+            
+            if game_time < now:
+                game_time += datetime.timedelta(days=1)
+        
+        else:
+            game_time = now + datetime.timedelta(minutes=time_input)
+        
+        return int(game_time.timestamp())
+    except (ValueError, TypeError):
+        return "Invalid time format"
+
 @client.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.errors.CheckFailure):
@@ -606,14 +626,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
 
         save_table_data(table_data)
 
-        try:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            game_time = datetime.datetime.strptime(entry_updates["game_time"], "%H:%M").replace(
-                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
-            )
-            game_time_unix = int(game_time.timestamp())
-        except ValueError:
-            game_time_unix = "Invalid time format"
+        game_time_unix = calculate_game_time(game_time)
 
         await interaction.response.send_message(
             f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
@@ -657,15 +670,7 @@ async def find(interaction: discord.Interaction):
 
     star_details = []
     for star in highest_stars:
-        try:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
-                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
-            )
-            game_time_unix = int(game_time.timestamp())
-        except ValueError:
-            game_time_unix = "Invalid time format"
-
+        game_time_unix = calculate_game_time(star['game_time'])
         star_details.append(
             f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
@@ -710,15 +715,7 @@ async def find_size(interaction: discord.Interaction, size: str):
 
     star_details = []
     for star in valid_entries:
-        try:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
-                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
-            )
-            game_time_unix = int(game_time.timestamp())
-        except ValueError:
-            game_time_unix = "Invalid time format"
-
+        game_time_unix = calculate_game_time(star['game_time'])
         star_details.append(
             f"World `{star['world']}` `{star['region']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
@@ -770,15 +767,7 @@ async def find_region(interaction: discord.Interaction, region: str):
 
     star_details = []
     for star in valid_entries:
-        try:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
-                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
-            )
-            game_time_unix = int(game_time.timestamp())
-        except ValueError:
-            game_time_unix = "Invalid time format"
-
+        game_time_unix = calculate_game_time(star['game_time'])
         star_details.append(
             f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
@@ -818,15 +807,7 @@ async def find_world(interaction: discord.Interaction, world: int):
 
     star_details = []
     for star in valid_entries:
-        try:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            game_time = datetime.datetime.strptime(star['game_time'], "%H:%M").replace(
-                year=now.year, month=now.month, day=now.day, tzinfo=datetime.timezone.utc
-            )
-            game_time_unix = int(game_time.timestamp())
-        except ValueError:
-            game_time_unix = "Invalid time format"
-
+        game_time_unix = calculate_game_time(star['game_time'])
         world_status = ""
         if world in free_to_play_worlds:
             world_status = " (Free-to-play)"
