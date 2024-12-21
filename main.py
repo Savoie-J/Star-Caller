@@ -287,10 +287,9 @@ async def clear(interaction: discord.Interaction):
         await interaction.response.send_message("Table is locked. Cannot clear entries.", ephemeral=True)
         return
 
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer()
     progress_message = await interaction.followup.send(
-        "Starting table clear...", 
-        ephemeral=True
+        "Starting table clear..."
     )
 
     table_data["entries"] = [
@@ -424,7 +423,7 @@ async def prune(interaction: discord.Interaction, world: int):
 
     save_table_data(table_data)
 
-    await interaction.response.send_message(f"Cleared data for world {world}.", ephemeral=True)
+    await interaction.response.send_message(f"Pruned data for world {world}.")
 
 @client.tree.command(name="create", description="Create a star call table.")
 @app_commands.default_permissions(administrator=True)
