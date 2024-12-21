@@ -68,26 +68,6 @@ def check_authorized_server():
 def is_valid_size(size_value):
         return size_value.startswith('s') and size_value[1:].isdigit()
 
-def calculate_game_time(time_input):
-    try:
-        now = datetime.datetime.now(datetime.timezone.utc)
-        
-        if isinstance(time_input, str):
-            time_parts = time_input.split(":")
-            hours, minutes = map(int, time_parts)
-            
-            game_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-            
-            if game_time < now:
-                game_time += datetime.timedelta(days=1)
-        
-        else:
-            game_time = now + datetime.timedelta(minutes=time_input)
-        
-        return int(game_time.timestamp())
-    except (ValueError, TypeError):
-        return "Invalid time format"
-
 @client.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.errors.CheckFailure):
@@ -503,7 +483,7 @@ async def create(interaction: discord.Interaction):
 
                 if not table_data["entries"]:
                     table_data["entries"] = [
-                        {"world": world, "region": "", "size": "", "game_time": ""} 
+                        {"world": world, "region": "", "size": "", "game_time": "", "game_time_full": ""} 
                         for world in all_worlds
                     ]
         except Exception as e:
@@ -588,7 +568,11 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
         if game_time is not None:
             current_utc = datetime.datetime.now(pytz.UTC)
             game_end_time = current_utc + datetime.timedelta(minutes=game_time)
+            
             entry_updates["game_time"] = game_end_time.strftime("%H:%M")
+            entry_updates["game_time_full"] = game_end_time.isoformat()
+            
+            game_time_unix = int(game_end_time.timestamp())
 
         table_data["entries"][world_index].update(entry_updates)
 
@@ -625,8 +609,6 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             return
 
         save_table_data(table_data)
-
-        game_time_unix = calculate_game_time(game_time)
 
         await interaction.response.send_message(
             f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
@@ -670,7 +652,7 @@ async def find(interaction: discord.Interaction):
 
     star_details = []
     for star in highest_stars:
-        game_time_unix = calculate_game_time(star['game_time'])
+        game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         star_details.append(
             f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
@@ -715,7 +697,7 @@ async def find_size(interaction: discord.Interaction, size: str):
 
     star_details = []
     for star in valid_entries:
-        game_time_unix = calculate_game_time(star['game_time'])
+        game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         star_details.append(
             f"World `{star['world']}` `{star['region']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
@@ -767,7 +749,7 @@ async def find_region(interaction: discord.Interaction, region: str):
 
     star_details = []
     for star in valid_entries:
-        game_time_unix = calculate_game_time(star['game_time'])
+        game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         star_details.append(
             f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
@@ -807,7 +789,7 @@ async def find_world(interaction: discord.Interaction, world: int):
 
     star_details = []
     for star in valid_entries:
-        game_time_unix = calculate_game_time(star['game_time'])
+        game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         world_status = ""
         if world in free_to_play_worlds:
             world_status = " (Free-to-play)"
