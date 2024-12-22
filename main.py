@@ -372,6 +372,120 @@ async def clear(interaction: discord.Interaction):
     except discord.HTTPException:
         pass
 
+@client.tree.command(name="clear-old", description="Clear expired entries in the star call table.")
+@app_commands.default_permissions(manage_events=True)
+@check_authorized_server()
+async def clear_old(interaction: discord.Interaction):
+    if not table_data.get("chunk_message_ids"):
+        await interaction.response.send_message("No table exists to clear.", ephemeral=True)
+        return
+    
+    if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
+        await interaction.response.send_message("Table is locked. Cannot clear entries.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+    progress_message = await interaction.followup.send(
+        "Starting table clear of expired entries..."
+    )
+
+    current_time = datetime.datetime.now(pytz.UTC)
+    
+    new_entries = []
+    for entry in table_data["entries"]:
+        if entry["game_time_full"]:
+            try:
+                entry_time = datetime.datetime.fromisoformat(entry["game_time_full"])
+                if entry_time > current_time:
+                    new_entries.append(entry)
+                    continue
+            except ValueError:
+                pass
+        
+        new_entries.append({
+            "world": entry["world"],
+            "region": "",
+            "size": "",
+            "game_time": "",
+            "game_time_full": ""
+        })
+
+    table_data["entries"] = new_entries
+
+    table_rows = []
+    for entry in table_data["entries"]:
+        world_name = entry["world"]
+        if entry["world"] in special_worlds:
+            world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif entry["world"] in local_worlds:
+            world_name = f"\u001b[30m{world_name}\u001b[0m"
+        elif entry["world"] in free_to_play_worlds:
+            world_name = f"\u001b[33m{world_name}\u001b[0m" 
+        else:
+            world_name = f"\u001b[37m{world_name}\u001b[0m"
+        
+        table_rows.append(
+            f"{world_name:<1} {entry['region']:<17} {entry['size']:<4} {entry['game_time']:<4}"
+        )
+
+    chunk_size = 32
+    chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
+    channel = interaction.client.get_channel(table_data["channel_id"])
+    total_chunks = len(chunks)
+
+    async def process_chunk(chunk_index: int, chunk: list) -> None:
+        max_retries = 3
+        base_delay = 5.0
+        
+        for attempt in range(max_retries):
+            try:
+                message_id = table_data["chunk_message_ids"][chunk_index]
+                message = await channel.fetch_message(message_id)
+                
+                updated_chunk = "```ansi\n" + "\n".join(chunk) + "```"
+                await message.edit(content=updated_chunk)
+                
+                return
+                
+            except discord.HTTPException as e:
+                if e.code == 429:
+                    retry_after = float(e.response.headers.get('Retry-After', 5))
+                    print(f"Rate limited on chunk {chunk_index}, waiting {retry_after} seconds")
+                    await asyncio.sleep(retry_after + 1) 
+                    base_delay = max(base_delay, retry_after + 2)
+                else:
+                    print(f"Error editing chunk {chunk_index} (attempt {attempt + 1}): {e}")
+                    await asyncio.sleep(base_delay)
+                    
+            except Exception as e:
+                print(f"Unexpected error on chunk {chunk_index} (attempt {attempt + 1}): {e}")
+                await asyncio.sleep(base_delay)
+        
+        print(f"Failed to process chunk {chunk_index} after {max_retries} attempts")
+
+    last_progress_update = time.time()
+
+    for i, chunk in enumerate(chunks):
+        await process_chunk(i, chunk)
+        
+        current_time = time.time()
+        if current_time - last_progress_update >= 5:
+            progress = f"Clearing expired entries... ({i + 1}/{total_chunks} chunks)"
+            try:
+                await progress_message.edit(content=progress)
+                last_progress_update = current_time
+            except discord.HTTPException:
+                pass
+
+        await asyncio.sleep(5.0) 
+
+    save_table_data(table_data)
+    
+    try:
+        await progress_message.edit(content="Expired entries cleared successfully!")
+    except discord.HTTPException:
+        pass
+
 @client.tree.command(name="prune", description="Clear data for a specific world.")
 @app_commands.describe(world="What world do you plan to prune entries for?")
 @app_commands.default_permissions(manage_events=True)
