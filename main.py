@@ -283,7 +283,7 @@ async def clear(interaction: discord.Interaction):
         await interaction.response.send_message("No table exists to clear.", ephemeral=True)
         return
     
-    if table_data["is_locked"]:
+    if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
         await interaction.response.send_message("Table is locked. Cannot clear entries.", ephemeral=True)
         return
 
@@ -378,7 +378,7 @@ async def prune(interaction: discord.Interaction, world: int):
         await interaction.response.send_message("No table exists to prune.", ephemeral=True)
         return
     
-    if table_data["is_locked"]:
+    if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
         await interaction.response.send_message("Table is locked. Cannot prune entries.", ephemeral=True)
         return
 
