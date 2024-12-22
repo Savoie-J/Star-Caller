@@ -540,13 +540,15 @@ async def create(interaction: discord.Interaction):
     ]
 )
 async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
+    await interaction.response.defer(ephemeral=True)
+    
     try:
         if not table_data.get("message_id"):
-            await interaction.response.send_message("No table exists. Use `/create` first.", ephemeral=True)
+            await interaction.followup.send("No table exists. Use `/create` first.", ephemeral=True)
             return
 
         if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
-            await interaction.response.send_message("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
+            await interaction.followup.send("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
             return
 
         world_index = None
@@ -556,7 +558,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
                 break
 
         if world_index is None:
-            await interaction.response.send_message(f"World `{world}` not found.", ephemeral=True)
+            await interaction.followup.send(f"World `{world}` not found.", ephemeral=True)
             return
 
         entry_updates = {}
@@ -577,7 +579,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
 
         channel = interaction.client.get_channel(table_data["channel_id"])
         if not channel:
-            await interaction.response.send_message("Error: Could not find the channel.", ephemeral=True)
+            await interaction.followup.send("Error: Could not find the channel.", ephemeral=True)
             return
 
         table_rows = []
@@ -602,24 +604,36 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             message_id = table_data["chunk_message_ids"][chunk_index]
             message = await channel.fetch_message(message_id)
             updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
-            await message.edit(content=updated_chunk)
-        except (discord.NotFound, discord.HTTPException) as e:
-            await interaction.response.send_message(f"Error updating message: {str(e)}", ephemeral=True)
+            
+            backoff = 1
+            while True:
+                try:
+                    await message.edit(content=updated_chunk)
+                    break
+                except discord.HTTPException as e:
+                    if not isinstance(e, discord.RateLimited):
+                        raise
+                    if backoff > 60:
+                        raise
+                    await asyncio.sleep(backoff)
+                    backoff *= 2
+
+            save_table_data(table_data)
+            
+            await interaction.followup.send(
+                f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
+                f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
+            )
+
+        except discord.NotFound:
+            await interaction.followup.send("Error: Message not found.", ephemeral=True)
+        except discord.HTTPException as e:
+            await interaction.followup.send(f"Error updating message: {str(e)}", ephemeral=True)
             return
-
-        save_table_data(table_data)
-
-        await interaction.response.send_message(
-            f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
-            f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
-        )
 
     except Exception as e:
         error_message = f"An error occurred: {str(e)}"
-        if not interaction.response.is_done():
-            await interaction.response.send_message(error_message, ephemeral=True)
-        else:
-            await interaction.followup.send(error_message, ephemeral=True)
+        await interaction.followup.send(error_message, ephemeral=True)
 
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
