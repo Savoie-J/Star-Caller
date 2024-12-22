@@ -294,7 +294,7 @@ async def clear(interaction: discord.Interaction):
     )
 
     table_data["entries"] = [
-        {"world": world, "region": "", "size": "", "game_time": ""} 
+        {"world": world, "region": "", "size": "", "game_time": "", "game_time_full": ""} 
         for world in all_worlds
     ]
 
@@ -396,7 +396,7 @@ async def prune(interaction: discord.Interaction, world: int):
         return
 
     table_data["entries"][world_index] = {
-        "world": world, "region": "", "size": "", "game_time": ""
+        "world": world, "region": "", "size": "", "game_time": "", "game_time_full": ""
     }
 
     table_rows = []
