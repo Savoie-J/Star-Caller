@@ -138,7 +138,7 @@ world_data = [
     (44, "Members"),
     (45, "Members"),
     (46, "Members"),
-    (47, "Members"),
+    (47, "Members", "Local"),
     (48, "Members", "Special"),
     (49, "Members"),
     (50, "Members"),
@@ -146,7 +146,7 @@ world_data = [
     (52, "Members", "Special"),
     (53, "Members"),
     (54, "Members"),
-    (55, "Free-to-play"),
+    (55, "Free-to-play", "Local"),
     (56, "Members"),
     (57, "Free-to-play"),
     (58, "Members"),
@@ -166,7 +166,7 @@ world_data = [
     (72, "Members"),
     (73, "Members"),
     (74, "Members"),
-    (75, "Members"),
+    (75, "Members", "Local"),
     (76, "Members"),
     (77, "Members"),
     (78, "Members"),
@@ -183,14 +183,14 @@ world_data = [
     (89, "Members"),
     (91, "Members"),
     (92, "Members"),
-    (94, "Free-to-play"),
+    (94, "Free-to-play", "Local"),
     (96, "Members"),
     (97, "Members"),
     (98, "Members"),
     (99, "Members"),
     (100, "Members"),
-    (101, "Members"),
-    (102, "Members"),
+    (101, "Members", "Local"),
+    (102, "Members", "Local"),
     (103, "Members"),
     (104, "Members"),
     (105, "Members"),
@@ -200,11 +200,11 @@ world_data = [
     (115, "Members"),
     (116, "Members"),
     (117, "Members"),
-    (118, "Members"),
+    (118, "Members", "Local"),
     (119, "Members"),
     (120, "Free-to-play"),
-    (121, "Members"),
-    (122, "Free-to-play"),
+    (121, "Members", "Local"),
+    (122, "Free-to-play", "Local"),
     (123, "Members"),
     (124, "Members"),
     (134, "Members"),
@@ -223,7 +223,7 @@ world_data = [
     (245, "Free-to-play"),
     (249, "Free-to-play"),
     (250, "Free-to-play"),
-    (251, "Free-to-play"),
+    (251, "Free-to-play", "Local"),
     (252, "Members"),
     (255, "Free-to-play"),
     (256, "Free-to-play"),
@@ -236,6 +236,7 @@ all_worlds = [world for world, *_ in world_data]
 members_worlds = [world for world, status, *_ in world_data if status == "Members"]
 free_to_play_worlds = [world for world, status, *_ in world_data if status == "Free-to-play"]
 special_worlds = [world for world, status, *rest in world_data if len(rest) > 0 and rest[0] == "Special"]
+local_worlds = [world for world, status, *rest in world_data if len(rest) > 0 and rest[0] == "Local"]
 
 @client.tree.command(name="lock", description="Lock the star call table to prevent modifications.")
 @app_commands.default_permissions(manage_events=True)
@@ -300,10 +301,12 @@ async def clear(interaction: discord.Interaction):
     table_rows = []
     for entry in table_data["entries"]:
         world_name = entry["world"]
-        if entry["world"] in free_to_play_worlds:
-            world_name = f"\u001b[33m{world_name}\u001b[0m" 
-        elif entry["world"] in special_worlds:
+        if entry["world"] in special_worlds:
             world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif entry["world"] in local_worlds:
+            world_name = f"\u001b[30m{world_name}\u001b[0m"
+        elif entry["world"] in free_to_play_worlds:
+            world_name = f"\u001b[33m{world_name}\u001b[0m" 
         else:
             world_name = f"\u001b[37m{world_name}\u001b[0m"
         
@@ -398,11 +401,13 @@ async def prune(interaction: discord.Interaction, world: int):
 
     table_rows = []
     for entry in table_data["entries"]:
-        world_name = entry["world"]
-        if entry["world"] in free_to_play_worlds:
-            world_name = f"\u001b[33m{world_name}\u001b[0m" 
-        elif entry["world"] in special_worlds:
-            world_name = f"\u001b[36m{world_name}\u001b[0m" 
+        world_name = entry["world"] 
+        if entry["world"] in special_worlds:
+            world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif entry["world"] in local_worlds:
+            world_name = f"\u001b[30m{world_name}\u001b[0m"
+        elif entry["world"] in free_to_play_worlds:
+            world_name = f"\u001b[33m{world_name}\u001b[0m"
         else:
             world_name = f"\u001b[37m{world_name}\u001b[0m"
         
@@ -449,11 +454,13 @@ async def create(interaction: discord.Interaction):
 
     table_rows = []
     for world in all_worlds:
-        world_name = world
-        if world in free_to_play_worlds:
+        world_name = world 
+        if world in special_worlds:
+            world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif world in local_worlds:
+            world_name = f"\u001b[30m{world_name}\u001b[0m"
+        elif world in free_to_play_worlds:
             world_name = f"\u001b[33m{world_name}\u001b[0m" 
-        elif world in special_worlds:
-            world_name = f"\u001b[36m{world_name}\u001b[0m" 
         else:
             world_name = f"\u001b[37m{world_name}\u001b[0m"
 
@@ -585,10 +592,12 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
         table_rows = []
         for entry in table_data["entries"]:
             world_name = entry["world"]
-            if entry["world"] in free_to_play_worlds:
-                world_name = f"\u001b[33m{world_name}\u001b[0m"
-            elif entry["world"] in special_worlds:
+            if entry["world"] in special_worlds:
                 world_name = f"\u001b[36m{world_name}\u001b[0m"
+            elif entry["world"] in local_worlds:
+                world_name = f"\u001b[30m{world_name}\u001b[0m"
+            elif entry["world"] in free_to_play_worlds:
+                world_name = f"\u001b[33m{world_name}\u001b[0m"
             else:
                 world_name = f"\u001b[37m{world_name}\u001b[0m"
             
@@ -804,10 +813,12 @@ async def find_world(interaction: discord.Interaction, world: int):
     for star in valid_entries:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         world_status = ""
-        if world in free_to_play_worlds:
-            world_status = " (Free-to-play)"
-        elif world in special_worlds:
+        if world in special_worlds:
             world_status = " (Special)"
+        elif world in local_worlds:
+            world_status = " (Localized)"
+        elif world in free_to_play_worlds:
+            world_status = " (Free-to-play)"
         else:
             world_status = " (Members)"
 
