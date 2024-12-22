@@ -540,7 +540,7 @@ async def create(interaction: discord.Interaction):
     ]
 )
 async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer()
     
     try:
         if not table_data.get("message_id"):
