@@ -545,7 +545,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             await interaction.response.send_message("No table exists. Use `/create` first.", ephemeral=True)
             return
 
-        if table_data["is_locked"]:
+        if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
             await interaction.response.send_message("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
             return
 
