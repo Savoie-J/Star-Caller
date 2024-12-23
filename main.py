@@ -276,7 +276,7 @@ async def unlock(interaction: discord.Interaction):
 
     await interaction.response.send_message("Star call table has been unlocked.", ephemeral=True)
 
-@client.tree.command(name="clear", description="Clear all entries in the star call table.")
+@client.tree.command(name="clear-all", description="Clear all entries in the star call table.")
 @app_commands.default_permissions(manage_events=True)
 @check_authorized_server()
 async def clear(interaction: discord.Interaction):
