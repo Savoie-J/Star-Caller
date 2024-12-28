@@ -15,8 +15,7 @@ token = os.getenv("token")
 DATA_FILE = "star_caller_data.json"
 
 AUTHORIZED_SERVER_IDS = [
-    1274620800896339968,  #dev1
-    1298696232251949116,  #dev2
+    1274620800896339968,  #development
     282907227017183232,   #star-find
 ]
 
@@ -660,6 +659,7 @@ async def create(interaction: discord.Interaction):
         app_commands.Choice(name="10", value="s10"),
     ]
 )
+@check_authorized_server()
 async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
     await interaction.response.defer()
     
