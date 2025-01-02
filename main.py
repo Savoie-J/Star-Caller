@@ -485,7 +485,7 @@ async def clear_old(interaction: discord.Interaction):
     except discord.HTTPException:
         pass
 
-@client.tree.command(name="clear-restricted", description="Clear entries that expired over an hour ago.")
+@client.tree.command(name="clear-restricted", description="Clear entries that expired over 40 minutes ago.")
 async def clear_restricted(interaction: discord.Interaction):
     if not hasattr(clear_restricted, "last_run"):
         clear_restricted.last_run = None
@@ -507,7 +507,7 @@ async def clear_restricted(interaction: discord.Interaction):
 
     await interaction.response.defer()
     progress_message = await interaction.followup.send(
-        "Starting table clear of entries expired over an hour ago..."
+        "Starting table clear of entries that expired 40 minutes ago..."
     )
 
     clear_restricted.last_run = current_time
@@ -517,7 +517,7 @@ async def clear_restricted(interaction: discord.Interaction):
         if entry["game_time_full"]:
             try:
                 entry_time = datetime.datetime.fromisoformat(entry["game_time_full"])
-                if entry_time + datetime.timedelta(hours=1) > current_time:
+                if entry_time + datetime.timedelta(minutes=40) > current_time:
                     new_entries.append(entry)
                     continue
             except ValueError:
@@ -613,7 +613,7 @@ async def clear_restricted(interaction: discord.Interaction):
                 print(f"Failed to update progress message: {e}")
 
     try:
-        await progress_message.edit(content=f"Entries that expired over an hour ago have been cleared!")
+        await progress_message.edit(content=f"Entries that expired over 40 minutes ago have been cleared!")
     except discord.HTTPException as e:
         print(f"Failed to send completion message: {e}")
 
