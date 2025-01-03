@@ -7,7 +7,7 @@ import pytz
 import time
 from datetime import timezone
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,11 +27,57 @@ class StarCaller(commands.Bot):
         )
 
     async def setup_hook(self):
+        self.auto_clear_restricted.start()
         await self.tree.sync()
+
     async def on_ready(self):
         await self.change_presence(
             activity=discord.CustomActivity(name="invoke /call to spot a star!")
         )
+
+    def cog_unload(self):
+        self.auto_clear_restricted.cancel()
+
+    @tasks.loop(hours=1)
+    async def auto_clear_restricted(self):
+        try:
+            class DummyResponse:
+                async def send_message(self, content, ephemeral=False):
+                    return None
+                
+                async def defer(self):
+                    pass
+
+            class DummyFollowup:
+                async def send(self, content):
+                    class DummyMessage:
+                        async def edit(self, content):
+                            pass
+                    return DummyMessage()
+
+            class DummyInteraction:
+                def __init__(self, client):
+                    self.client = client
+                    self.response = DummyResponse()
+                    self.followup = DummyFollowup()
+
+            dummy_interaction = DummyInteraction(self)
+
+            command = self.tree.get_command("clear-restricted")
+            if command:
+                await command.callback(dummy_interaction)
+                #print(f"[{datetime.datetime.now(pytz.UTC)}] Invoked clear-restricted.")
+            else:
+                print("Clear-restricted command not found")
+
+        except Exception as e:
+            print(f"Error in auto_clear_restricted: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    @auto_clear_restricted.before_loop
+    async def before_auto_clear(self):
+        await self.wait_until_ready()
 
 client = StarCaller()
 
@@ -485,7 +531,7 @@ async def clear_old(interaction: discord.Interaction):
     except discord.HTTPException:
         pass
 
-@client.tree.command(name="clear-restricted", description="Clear entries that expired over 40 minutes ago.")
+@client.tree.command(name="clear-restricted", description="Clear entries that expired over 30 minutes ago.")
 async def clear_restricted(interaction: discord.Interaction):
     if not hasattr(clear_restricted, "last_run"):
         clear_restricted.last_run = None
@@ -505,9 +551,13 @@ async def clear_restricted(interaction: discord.Interaction):
         await interaction.response.send_message("No table exists to clear.", ephemeral=True)
         return
 
+    if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
+        await interaction.response.send_message("Table is locked. Cannot clear entries.", ephemeral=True)
+        return    
+
     await interaction.response.defer()
     progress_message = await interaction.followup.send(
-        "Starting table clear of entries that expired 40 minutes ago..."
+        "Starting table clear of entries that expired 30 minutes ago..."
     )
 
     clear_restricted.last_run = current_time
@@ -517,7 +567,7 @@ async def clear_restricted(interaction: discord.Interaction):
         if entry["game_time_full"]:
             try:
                 entry_time = datetime.datetime.fromisoformat(entry["game_time_full"])
-                if entry_time + datetime.timedelta(minutes=40) > current_time:
+                if entry_time + datetime.timedelta(minutes=30) > current_time:
                     new_entries.append(entry)
                     continue
             except ValueError:
@@ -612,8 +662,10 @@ async def clear_restricted(interaction: discord.Interaction):
             except discord.HTTPException as e:
                 print(f"Failed to update progress message: {e}")
 
+    save_table_data(table_data)
+
     try:
-        await progress_message.edit(content=f"Entries that expired over 40 minutes ago have been cleared!")
+        await progress_message.edit(content=f"Entries that expired over 30 minutes ago have been cleared!")
     except discord.HTTPException as e:
         print(f"Failed to send completion message: {e}")
 
