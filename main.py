@@ -551,7 +551,7 @@ async def clear_restricted(interaction: discord.Interaction):
         await interaction.response.send_message("No table exists to clear.", ephemeral=True)
         return
 
-    if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
+    if table_data["is_locked"]:
         await interaction.response.send_message("Table is locked. Cannot clear entries.", ephemeral=True)
         return    
 
