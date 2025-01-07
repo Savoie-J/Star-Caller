@@ -35,10 +35,15 @@ class StarCaller(commands.Bot):
             activity=discord.CustomActivity(name="invoke /call to spot a star!")
         )
 
+    async def close(self):
+        if hasattr(self, 'message_queue'):
+            await self.message_queue.stop()
+        await super().close()
+
     def cog_unload(self):
         self.auto_clear_restricted.cancel()
 
-    @tasks.loop(hours=1)
+    @tasks.loop(minutes=30)
     async def auto_clear_restricted(self):
         try:
             class DummyResponse:
@@ -80,6 +85,38 @@ class StarCaller(commands.Bot):
         await self.wait_until_ready()
 
 client = StarCaller()
+client.clear_lock = asyncio.Lock()
+
+class MessageQueue:
+    def __init__(self):
+        self.queue = asyncio.Queue()
+        self.task = None
+        self.running = True
+
+    async def process_queue(self):
+        while self.running:
+            try:
+                message, content = await self.queue.get()
+                await message.edit(content=content)
+                self.queue.task_done()
+                await asyncio.sleep(6)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"Error processing message edit: {e}")
+
+    def start(self):
+        self.task = asyncio.create_task(self.process_queue())
+
+    async def stop(self):
+        self.running = False
+        if self.task:
+            await self.queue.join()
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
 
 def load_table_data():
     try:
@@ -366,7 +403,7 @@ async def clear(interaction: discord.Interaction):
 
     async def process_chunk(chunk_index: int, chunk: list) -> None:
         max_retries = 3
-        base_delay = 8.0
+        base_delay = 12.0
         
         for attempt in range(max_retries):
             try:
@@ -408,7 +445,7 @@ async def clear(interaction: discord.Interaction):
             except discord.HTTPException:
                 pass
 
-        await asyncio.sleep(8.0) 
+        await asyncio.sleep(12.0) 
 
     save_table_data(table_data)
     
@@ -480,7 +517,7 @@ async def clear_old(interaction: discord.Interaction):
 
     async def process_chunk(chunk_index: int, chunk: list) -> None:
         max_retries = 3
-        base_delay = 8.0
+        base_delay = 12.0
         
         for attempt in range(max_retries):
             try:
@@ -522,7 +559,7 @@ async def clear_old(interaction: discord.Interaction):
             except discord.HTTPException:
                 pass
 
-        await asyncio.sleep(8.0) 
+        await asyncio.sleep(12.0) 
 
     save_table_data(table_data)
     
@@ -533,141 +570,153 @@ async def clear_old(interaction: discord.Interaction):
 
 @client.tree.command(name="clear-restricted", description="Clear entries that expired over 30 minutes ago.")
 async def clear_restricted(interaction: discord.Interaction):
-    if not hasattr(clear_restricted, "last_run"):
-        clear_restricted.last_run = None
+    is_real_interaction = hasattr(interaction.response, 'is_done')
     
-    current_time = datetime.datetime.now(pytz.UTC)
-    if clear_restricted.last_run is not None:
-        time_diff = (current_time - clear_restricted.last_run).total_seconds() / 60
-        if time_diff < 15:
-            wait_time = round(15 - time_diff)
-            await interaction.response.send_message(
-                f"In order to combat abuse, this command can only be used once every 15 minutes. Please wait `{wait_time}` minutes before invoking it again.",
-                ephemeral=True
-            )
+    if is_real_interaction and not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    
+    async with interaction.client.clear_lock:
+        if not hasattr(clear_restricted, "last_run"):
+            clear_restricted.last_run = None
+        
+        current_time = datetime.datetime.now(pytz.UTC)
+        if clear_restricted.last_run is not None:
+            time_diff = (current_time - clear_restricted.last_run).total_seconds() / 60
+            if time_diff < 10:
+                wait_time = round(10 - time_diff)
+                if is_real_interaction:
+                    await interaction.followup.send(
+                        f"In order to combat abuse, this command can only be used once every 10 minutes. Please wait `{wait_time}` minutes before invoking it again."
+                    )
+                return
+
+        if not table_data.get("chunk_message_ids"):
+            if is_real_interaction:
+                await interaction.followup.send("No table exists to clear.")
             return
 
-    if not table_data.get("chunk_message_ids"):
-        await interaction.response.send_message("No table exists to clear.", ephemeral=True)
-        return
+        if table_data["is_locked"]:
+            if is_real_interaction:
+                await interaction.followup.send("Table is locked. Cannot clear entries.")
+            return    
 
-    if table_data["is_locked"]:
-        await interaction.response.send_message("Table is locked. Cannot clear entries.", ephemeral=True)
-        return    
-
-    await interaction.response.defer()
-    progress_message = await interaction.followup.send(
-        "Starting table clear of entries that expired 30 minutes ago..."
-    )
-
-    clear_restricted.last_run = current_time
-    
-    new_entries = []
-    for entry in table_data["entries"]:
-        if entry["game_time_full"]:
-            try:
-                entry_time = datetime.datetime.fromisoformat(entry["game_time_full"])
-                if entry_time + datetime.timedelta(minutes=30) > current_time:
-                    new_entries.append(entry)
-                    continue
-            except ValueError:
-                pass
-        
-        new_entries.append({
-            "world": entry["world"],
-            "region": "",
-            "size": "",
-            "game_time": "",
-            "game_time_full": ""
-        })
-
-    table_data["entries"] = new_entries
-
-    table_rows = []
-    for entry in table_data["entries"]:
-        world_name = entry["world"]
-        if entry["world"] in special_worlds:
-            world_name = f"\u001b[36m{world_name}\u001b[0m"
-        elif entry["world"] in local_worlds:
-            world_name = f"\u001b[30m{world_name}\u001b[0m"
-        elif entry["world"] in free_to_play_worlds:
-            world_name = f"\u001b[33m{world_name}\u001b[0m" 
+        if is_real_interaction:
+            await interaction.followup.send("Clear-restricted has been invoked successfully.")
+            progress_message = await interaction.channel.send(
+                "Starting table clear of entries that expired 30 minutes ago..."
+            )
         else:
-            world_name = f"\u001b[37m{world_name}\u001b[0m"
-        
-        table_rows.append(
-            f"{world_name:<1} {entry['region']:<17} {entry['size']:<4} {entry['game_time']:<4}"
-        )
+            progress_message = None
 
-    chunk_size = 32
-    chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
-    channel = interaction.client.get_channel(table_data["channel_id"])
-    total_chunks = len(chunks)
-
-    async def process_chunk(chunk_index: int, chunk: list) -> None:
-        max_retries = 3
-        base_delay = 10.0
+        clear_restricted.last_run = current_time
         
-        for attempt in range(max_retries):
-            try:
-                message_id = table_data["chunk_message_ids"][chunk_index]
-                message = await channel.fetch_message(message_id)
-                
-                updated_chunk = "```ansi\n" + "\n".join(chunk) + "```"
-                
-                
-                await message.edit(content=updated_chunk)
-                return
-                
-            except discord.RateLimited as e:
-                retry_after = e.retry_after
-                print(f"Rate limited on chunk {chunk_index}, waiting {retry_after} seconds.")
-                await asyncio.sleep(retry_after + 1)
-                continue
-                
-            except discord.HTTPException as e:
-                print(f"HTTP Error on chunk {chunk_index} (attempt {attempt + 1}): {e}")
-                if e.code == 429:
-                    retry_after = float(e.response.headers.get('Retry-After', base_delay))
-                    print(f"Rate limited (HTTP 429) on chunk {chunk_index}, waiting {retry_after} seconds.")
-                    await asyncio.sleep(retry_after + 1)
-                    base_delay = max(base_delay, retry_after + 2)
-                else:
-                    await asyncio.sleep(base_delay)
+        new_entries = []
+        for entry in table_data["entries"]:
+            if entry["game_time_full"]:
+                try:
+                    entry_time = datetime.datetime.fromisoformat(entry["game_time_full"])
+                    if entry_time + datetime.timedelta(minutes=30) > current_time:
+                        new_entries.append(entry)
+                        continue
+                except ValueError:
+                    pass
+            
+            new_entries.append({
+                "world": entry["world"],
+                "region": "",
+                "size": "",
+                "game_time": "",
+                "game_time_full": ""
+            })
+
+        table_data["entries"] = new_entries
+
+        table_rows = []
+        for entry in table_data["entries"]:
+            world_name = entry["world"]
+            if entry["world"] in special_worlds:
+                world_name = f"\u001b[36m{world_name}\u001b[0m"
+            elif entry["world"] in local_worlds:
+                world_name = f"\u001b[30m{world_name}\u001b[0m"
+            elif entry["world"] in free_to_play_worlds:
+                world_name = f"\u001b[33m{world_name}\u001b[0m" 
+            else:
+                world_name = f"\u001b[37m{world_name}\u001b[0m"
+            
+            table_rows.append(
+                f"{world_name:<1} {entry['region']:<17} {entry['size']:<4} {entry['game_time']:<4}"
+            )
+
+        chunk_size = 32
+        chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
+        channel = interaction.client.get_channel(table_data["channel_id"])
+        total_chunks = len(chunks)
+
+        async def process_chunk(chunk_index: int, chunk: list) -> None:
+            max_retries = 3
+            base_delay = 24.0
+            
+            for attempt in range(max_retries):
+                try:
+                    message_id = table_data["chunk_message_ids"][chunk_index]
+                    message = await channel.fetch_message(message_id)
                     
-            except Exception as e:
-                print(f"Unexpected error on chunk {chunk_index} (attempt {attempt + 1}): {str(e)}")
-                await asyncio.sleep(base_delay)
-        
-        print(f"Failed to process chunk {chunk_index} after {max_retries} attempts")
+                    updated_chunk = "```ansi\n" + "\n".join(chunk) + "```"
+                    
+                    await message.edit(content=updated_chunk)
+                    return
+                    
+                except discord.RateLimited as e:
+                    retry_after = e.retry_after
+                    print(f"Rate limited on chunk {chunk_index}, waiting {retry_after} seconds.")
+                    await asyncio.sleep(retry_after + 1)
+                    continue
+                    
+                except discord.HTTPException as e:
+                    print(f"HTTP Error on chunk {chunk_index} (attempt {attempt + 1}): {e}")
+                    if e.code == 429:
+                        retry_after = float(e.response.headers.get('Retry-After', base_delay))
+                        print(f"Rate limited (HTTP 429) on chunk {chunk_index}, waiting {retry_after} seconds.")
+                        await asyncio.sleep(retry_after + 1)
+                        base_delay = max(base_delay, retry_after + 2)
+                    else:
+                        await asyncio.sleep(base_delay)
+                        
+                except Exception as e:
+                    print(f"Unexpected error on chunk {chunk_index} (attempt {attempt + 1}): {str(e)}")
+                    await asyncio.sleep(base_delay)
+            
+            print(f"Failed to process chunk {chunk_index} after {max_retries} attempts")
 
-    last_progress_update = time.time()
-    chunks_processed = 0
-    total_chunks = len(chunks)
-    chunk_delay = 10.0 
+        last_progress_update = time.time()
+        chunks_processed = 0
+        total_chunks = len(chunks)
+        chunk_delay = 24.0 
 
-    for i, chunk in enumerate(chunks):
-        if i > 0:
-            await asyncio.sleep(chunk_delay)
-        
-        await process_chunk(i, chunk)
-        chunks_processed += 1
-        
-        current_time = time.time()
-        if current_time - last_progress_update >= 5:
-            progress = f"Clearing expired entries... ({chunks_processed}/{total_chunks} chunks)"
+        for i, chunk in enumerate(chunks):
+            if i > 0:
+                await asyncio.sleep(chunk_delay)
+            
+            await process_chunk(i, chunk)
+            chunks_processed += 1
+            
+            if is_real_interaction:
+                current_time = time.time()
+                if current_time - last_progress_update >= 5:
+                    progress = f"Clearing expired entries... ({chunks_processed}/{total_chunks} chunks)"
+                    try:
+                        await progress_message.edit(content=progress)
+                        last_progress_update = current_time
+                    except discord.HTTPException as e:
+                        print(f"Failed to update progress message: {e}")
+
+        save_table_data(table_data)
+
+        if is_real_interaction:
             try:
-                await progress_message.edit(content=progress)
-                last_progress_update = current_time
+                await progress_message.edit(content=f"Entries that expired over 30 minutes ago have been cleared!")
             except discord.HTTPException as e:
-                print(f"Failed to update progress message: {e}")
-
-    save_table_data(table_data)
-
-    try:
-        await progress_message.edit(content=f"Entries that expired over 30 minutes ago have been cleared!")
-    except discord.HTTPException as e:
-        print(f"Failed to send completion message: {e}")
+                print(f"Failed to send completion message: {e}")
 
 @client.tree.command(name="prune", description="Clear data for a specific world.")
 @app_commands.describe(world="What world do you plan to prune entries for?")
@@ -845,102 +894,94 @@ async def create(interaction: discord.Interaction):
 )
 @check_authorized_server()
 async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
-    await interaction.response.defer()
+    if not interaction.response.is_done():
+        await interaction.response.defer()
     
-    try:
-        if not table_data.get("message_id"):
-            await interaction.followup.send("No table exists. Use `/create` first.", ephemeral=True)
-            return
-
-        if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
-            await interaction.followup.send("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
-            return
-
-        world_index = None
-        for i, entry in enumerate(table_data["entries"]):
-            if entry["world"] == world:
-                world_index = i
-                break
-
-        if world_index is None:
-            await interaction.followup.send(f"World `{world}` not found.", ephemeral=True)
-            return
-
-        entry_updates = {}
-        if region is not None:
-            entry_updates["region"] = region
-        if size is not None:
-            entry_updates["size"] = size
-        if game_time is not None:
-            current_utc = datetime.datetime.now(pytz.UTC)
-            game_end_time = current_utc + datetime.timedelta(minutes=game_time)
-            
-            entry_updates["game_time"] = game_end_time.strftime("%H:%M")
-            entry_updates["game_time_full"] = game_end_time.isoformat()
-            
-            game_time_unix = int(game_end_time.timestamp())
-
-        table_data["entries"][world_index].update(entry_updates)
-
-        channel = interaction.client.get_channel(table_data["channel_id"])
-        if not channel:
-            await interaction.followup.send("Error: Could not find the channel.", ephemeral=True)
-            return
-
-        table_rows = []
-        for entry in table_data["entries"]:
-            world_name = entry["world"]
-            if entry["world"] in special_worlds:
-                world_name = f"\u001b[36m{world_name}\u001b[0m"
-            elif entry["world"] in local_worlds:
-                world_name = f"\u001b[30m{world_name}\u001b[0m"
-            elif entry["world"] in free_to_play_worlds:
-                world_name = f"\u001b[33m{world_name}\u001b[0m"
-            else:
-                world_name = f"\u001b[37m{world_name}\u001b[0m"
-            
-            table_rows.append(
-                f"{world_name:<1} {entry['region']:<17} {entry['size']:<4} {entry['game_time']:<4}"
-            )
-
-        chunk_size = 32
-        chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
-        chunk_index = world_index // chunk_size
-
+    async with interaction.client.clear_lock:
+        if not hasattr(interaction.client, 'message_queue'):
+            interaction.client.message_queue = MessageQueue()
+            interaction.client.message_queue.start()
+        
         try:
-            message_id = table_data["chunk_message_ids"][chunk_index]
-            message = await channel.fetch_message(message_id)
-            updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
-            
-            backoff = 1
-            while True:
-                try:
-                    await message.edit(content=updated_chunk)
+            if not table_data.get("message_id"):
+                await interaction.followup.send("No table exists. Use `/create` first.", ephemeral=True)
+                return
+
+            if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
+                await interaction.followup.send("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
+                return
+
+            world_index = None
+            for i, entry in enumerate(table_data["entries"]):
+                if entry["world"] == world:
+                    world_index = i
                     break
-                except discord.HTTPException as e:
-                    if not isinstance(e, discord.RateLimited):
-                        raise
-                    if backoff > 60:
-                        raise
-                    await asyncio.sleep(backoff)
-                    backoff *= 2
 
-            save_table_data(table_data)
-            
-            await interaction.followup.send(
-                f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
-                f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
-            )
+            if world_index is None:
+                await interaction.followup.send(f"World `{world}` not found.", ephemeral=True)
+                return
 
-        except discord.NotFound:
-            await interaction.followup.send("Error: Message not found.", ephemeral=True)
-        except discord.HTTPException as e:
-            await interaction.followup.send(f"Error updating message: {str(e)}", ephemeral=True)
-            return
+            entry_updates = {}
+            if region is not None:
+                entry_updates["region"] = region
+            if size is not None:
+                entry_updates["size"] = size
+            if game_time is not None:
+                current_utc = datetime.datetime.now(pytz.UTC)
+                game_end_time = current_utc + datetime.timedelta(minutes=game_time)
+                
+                entry_updates["game_time"] = game_end_time.strftime("%H:%M")
+                entry_updates["game_time_full"] = game_end_time.isoformat()
+                
+                game_time_unix = int(game_end_time.timestamp())
 
-    except Exception as e:
-        error_message = f"An error occurred: {str(e)}"
-        await interaction.followup.send(error_message, ephemeral=True)
+            table_data["entries"][world_index].update(entry_updates)
+
+            channel = interaction.client.get_channel(table_data["channel_id"])
+            if not channel:
+                await interaction.followup.send("Error: Could not find the channel.", ephemeral=True)
+                return
+
+            table_rows = []
+            for entry in table_data["entries"]:
+                world_name = entry["world"]
+                if entry["world"] in special_worlds:
+                    world_name = f"\u001b[36m{world_name}\u001b[0m"
+                elif entry["world"] in local_worlds:
+                    world_name = f"\u001b[30m{world_name}\u001b[0m"
+                elif entry["world"] in free_to_play_worlds:
+                    world_name = f"\u001b[33m{world_name}\u001b[0m"
+                else:
+                    world_name = f"\u001b[37m{world_name}\u001b[0m"
+                
+                table_rows.append(
+                    f"{world_name:<1} {entry['region']:<17} {entry['size']:<4} {entry['game_time']:<4}"
+                )
+
+            chunk_size = 32
+            chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
+            chunk_index = world_index // chunk_size
+
+            try:
+                message_id = table_data["chunk_message_ids"][chunk_index]
+                message = await channel.fetch_message(message_id)
+                updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
+                
+                await interaction.client.message_queue.queue.put((message, updated_chunk))
+                save_table_data(table_data)
+
+                await interaction.followup.send(
+                    f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
+                    f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
+                )
+
+            except discord.NotFound:
+                await interaction.followup.send("Error: Message not found.", ephemeral=True)
+            except discord.HTTPException as e:
+                await interaction.followup.send(f"Error updating message: {str(e)}", ephemeral=True)
+
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
