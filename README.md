@@ -3,6 +3,7 @@
 >Utilize the following commands, in order, in the terminal window to run this program. If running your own bot, initialize a file titled `.env` and declare your bots discord token there in the following format:
 
 `token = place your token here`
+`api = "place the str(url) to your api endpoint here"`
 
 ## Command Guide
 

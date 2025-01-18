@@ -5,6 +5,7 @@ import datetime
 import json
 import pytz
 import time
+import requests
 from datetime import timezone
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -13,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 token = os.getenv("token")
 DATA_FILE = "star_caller_data.json"
+api = os.getenv("api")
 
 AUTHORIZED_SERVER_IDS = [
     1274620800896339968,  #development
@@ -150,6 +152,22 @@ def check_authorized_server():
 def is_valid_size(size_value):
         return size_value.startswith('s') and size_value[1:].isdigit()
 
+def is_valid_game_time(time_str: str) -> bool:
+    try:
+        if len(time_str.split(':')) != 2:
+            return False
+        hours, minutes = map(int, time_str.split(':'))
+        return 0 <= hours <= 23 and 0 <= minutes <= 59
+    except (ValueError, AttributeError):
+        return False
+
+def is_valid_game_time_full(time_str: str) -> bool:
+    try:
+        datetime.datetime.fromisoformat(time_str)
+        return True
+    except (ValueError, TypeError):
+        return False
+
 @client.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.errors.CheckFailure):
@@ -162,7 +180,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         print(f"Slash command error occurred: {str(error)}")
         if not interaction.response.is_done():
             await interaction.response.send_message(
-                "An error occurred while processing the command.", 
+                f"An error occurred while processing the command: \n{error}", 
                 ephemeral=True
             )
 
@@ -171,6 +189,18 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     print(f"Message command error occurred: {str(error)}")
+
+def make_post_request(url, data):
+    try:
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        #print(f"Error making POST request: {e}")
+        if response := getattr(e, 'response', None):
+            print(f"Response status code: {response.status_code}")
+            print(f"Response body: {response.text}")
+        return None
 
 table_data = load_table_data()
 
@@ -569,6 +599,7 @@ async def clear_old(interaction: discord.Interaction):
         pass
 
 @client.tree.command(name="clear-restricted", description="Clear entries that expired over 30 minutes ago.")
+@check_authorized_server()
 async def clear_restricted(interaction: discord.Interaction):
     is_real_interaction = hasattr(interaction.response, 'is_done')
     
@@ -894,33 +925,35 @@ async def create(interaction: discord.Interaction):
 )
 @check_authorized_server()
 async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
-    if not interaction.response.is_done():
+    try:
         await interaction.response.defer()
+    except (discord.NotFound, discord.HTTPException):
+        pass
     
     async with interaction.client.clear_lock:
         if not hasattr(interaction.client, 'message_queue'):
             interaction.client.message_queue = MessageQueue()
             interaction.client.message_queue.start()
         
+        if not table_data.get("message_id"):
+            await interaction.followup.send("No table exists. Use `/create` first.", ephemeral=True)
+            return
+
+        if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
+            await interaction.followup.send("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
+            return
+
+        world_index = None
+        for i, entry in enumerate(table_data["entries"]):
+            if entry["world"] == world:
+                world_index = i
+                break
+
+        if world_index is None:
+            await interaction.followup.send(f"World `{world}` not found.", ephemeral=True)
+            return
+
         try:
-            if not table_data.get("message_id"):
-                await interaction.followup.send("No table exists. Use `/create` first.", ephemeral=True)
-                return
-
-            if table_data["is_locked"] and not interaction.user.guild_permissions.manage_events:
-                await interaction.followup.send("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
-                return
-
-            world_index = None
-            for i, entry in enumerate(table_data["entries"]):
-                if entry["world"] == world:
-                    world_index = i
-                    break
-
-            if world_index is None:
-                await interaction.followup.send(f"World `{world}` not found.", ephemeral=True)
-                return
-
             entry_updates = {}
             if region is not None:
                 entry_updates["region"] = region
@@ -962,25 +995,40 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             chunks = [table_rows[i:i + chunk_size] for i in range(0, len(table_rows), chunk_size)]
             chunk_index = world_index // chunk_size
 
-            try:
-                message_id = table_data["chunk_message_ids"][chunk_index]
-                message = await channel.fetch_message(message_id)
-                updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
-                
-                await interaction.client.message_queue.queue.put((message, updated_chunk))
-                save_table_data(table_data)
+            message_id = table_data["chunk_message_ids"][chunk_index]
+            message = await channel.fetch_message(message_id)
+            updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
+            
+            await interaction.client.message_queue.queue.put((message, updated_chunk))
+            save_table_data(table_data)
 
-                await interaction.followup.send(
-                    f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
-                    f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
-                )
+            await interaction.followup.send(
+                f"Spotted a `{size}` star in `{region}` on world `{world}`!\n"
+                f"It will fall <t:{game_time_unix}:R> (`{entry_updates['game_time']}`)."
+            )
 
-            except discord.NotFound:
-                await interaction.followup.send("Error: Message not found.", ephemeral=True)
-            except discord.HTTPException as e:
-                await interaction.followup.send(f"Error updating message: {str(e)}", ephemeral=True)
+            if is_valid_size(size):
+                try:
+                    size_number = int(size.lstrip('s'))
+                    data = {
+                        "world": world,
+                        "location": region,
+                        "createdBy": str(interaction.user.id),
+                        "time": game_time_unix,
+                        "size": size_number
+                    }
+                    #response_data = make_post_request(api, data)
+                except Exception as api_error:
+                    #print(f"API Error occurred while reporting star: {api_error}")
+                    #print(f"API Data: {response_data}")
+                    pass
 
+        except discord.NotFound:
+            await interaction.followup.send("Error: Message not found.", ephemeral=True)
+        except discord.HTTPException as e:
+            await interaction.followup.send(f"Error updating message: {str(e)}", ephemeral=True)
         except Exception as e:
+            print(f"Error executing call command: {str(e)}")
             await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
@@ -994,7 +1042,10 @@ async def find(interaction: discord.Interaction):
         if entry['size'] != "" and
         entry['region'] != "" and
         entry['game_time'] != "" and
-        is_valid_size(entry['size'])
+        entry['game_time_full'] != "" and
+        is_valid_size(entry['size']) and
+        is_valid_game_time(entry['game_time']) and
+        is_valid_game_time_full(entry['game_time_full'])
     ]
 
     if not valid_entries:
@@ -1014,8 +1065,25 @@ async def find(interaction: discord.Interaction):
     star_details = []
     for star in highest_stars:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+        world_status = ""
+        match star['world']:
+            case 30:
+                world_status = " `[2000 Total]`"
+            case 48:
+                world_status = " `[2600 Total]`"
+            case 52:
+                world_status = " `[VIP]`"
+            case 86 | 114:
+                world_status = " `[1500 Total]`"
+            case 47 | 75 | 94 | 101 | 251:
+                world_status = " `[Português]`"
+            case 55 | 118:
+                world_status = " `[Français]`"
+            case 102 | 121 | 122:
+                world_status = " `[Deutsch]`"
+
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     await interaction.response.send_message(
@@ -1049,7 +1117,10 @@ async def find_size(interaction: discord.Interaction, size: str):
         if entry['size'] == size and 
            entry['region'] != "" and 
            entry['game_time'] != "" and
-           is_valid_size(entry['size'])
+           entry['game_time_full'] != "" and
+           is_valid_size(entry['size']) and
+           is_valid_game_time(entry['game_time']) and
+           is_valid_game_time_full(entry['game_time_full'])
     ]
 
     if not valid_entries:
@@ -1059,8 +1130,25 @@ async def find_size(interaction: discord.Interaction, size: str):
     star_details = []
     for star in valid_entries:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+        world_status = ""
+        match star['world']:
+            case 30:
+                world_status = " `[2000 Total]`"
+            case 48:
+                world_status = " `[2600 Total]`"
+            case 52:
+                world_status = " `[VIP]`"
+            case 86 | 114:
+                world_status = " `[1500 Total]`"
+            case 47 | 75 | 94 | 101 | 251:
+                world_status = " `[Português]`"
+            case 55 | 118:
+                world_status = " `[Français]`"
+            case 102 | 121 | 122:
+                world_status = " `[Deutsch]`"
+
         star_details.append(
-            f"World `{star['world']}` `{star['region']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     await interaction.response.send_message(
@@ -1101,7 +1189,10 @@ async def find_region(interaction: discord.Interaction, region: str):
         if entry['region'] == region and 
            entry['size'] != "" and 
            entry['game_time'] != "" and
-           is_valid_size(entry['size'])
+           entry['game_time_full'] != "" and
+           is_valid_size(entry['size']) and
+           is_valid_game_time(entry['game_time']) and
+           is_valid_game_time_full(entry['game_time_full'])
     ]
 
     if not valid_entries:
@@ -1111,8 +1202,25 @@ async def find_region(interaction: discord.Interaction, region: str):
     star_details = []
     for star in valid_entries:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+        world_status = ""
+        match star['world']:
+            case 30:
+                world_status = " `[2000 Total]`"
+            case 48:
+                world_status = " `[2600 Total]`"
+            case 52:
+                world_status = " `[VIP]`"
+            case 86 | 114:
+                world_status = " `[1500 Total]`"
+            case 47 | 75 | 94 | 101 | 251:
+                world_status = " `[Português]`"
+            case 55 | 118:
+                world_status = " `[Français]`"
+            case 102 | 121 | 122:
+                world_status = " `[Deutsch]`"
+
         star_details.append(
-            f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     await interaction.response.send_message(
@@ -1138,7 +1246,10 @@ async def find_world(interaction: discord.Interaction, world: int):
         entry['size'] != "" and
         entry['region'] != "" and
         entry['game_time'] != "" and
-        is_valid_size(entry['size'])
+        entry['game_time_full'] != "" and
+        is_valid_size(entry['size']) and
+        is_valid_game_time(entry['game_time']) and
+        is_valid_game_time_full(entry['game_time_full'])
     ]
 
     if not valid_entries:  
@@ -1152,14 +1263,26 @@ async def find_world(interaction: discord.Interaction, world: int):
     for star in valid_entries:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         world_status = ""
-        if world in special_worlds:
-            world_status = " (Special)"
-        elif world in local_worlds:
-            world_status = " (Localized)"
-        elif world in free_to_play_worlds:
-            world_status = " (Free-to-play)"
-        else:
-            world_status = " (Members)"
+        match star['world']:
+            case 30:
+                world_status = " `[2000 Total]`"
+            case 48:
+                world_status = " `[2600 Total]`"
+            case 52:
+                world_status = " `[VIP]`"
+            case 86 | 114:
+                world_status = " `[1500 Total]`"
+            case 47 | 75 | 94 | 101 | 251:
+                world_status = " `[Português]`"
+            case 55 | 118:
+                world_status = " `[Français]`"
+            case 102 | 121 | 122:
+                world_status = " `[Deutsch]`"
+            case _:
+                if world in free_to_play_worlds:
+                    world_status = " `[Free-to-play]`"
+                else:
+                    world_status = " `[Members]`"
 
         star_details.append(
             f"Size `{star['size'][1:]}` in `{star['region']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
