@@ -1081,6 +1081,8 @@ async def find(interaction: discord.Interaction):
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
                 world_status = " `[Deutsch]`"
+            case 18 | 33 | 57 | 115 | 120 | 136 | 137:
+                world_status = " `[Legacy]`"
 
         star_details.append(
             f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
@@ -1146,6 +1148,8 @@ async def find_size(interaction: discord.Interaction, size: str):
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
                 world_status = " `[Deutsch]`"
+            case 18 | 33 | 57 | 115 | 120 | 136 | 137:
+                world_status = " `[Legacy]`"
 
         star_details.append(
             f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
@@ -1218,6 +1222,8 @@ async def find_region(interaction: discord.Interaction, region: str):
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
                 world_status = " `[Deutsch]`"
+            case 18 | 33 | 57 | 115 | 120 | 136 | 137:
+                world_status = " `[Legacy]`"
 
         star_details.append(
             f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
@@ -1278,8 +1284,10 @@ async def find_world(interaction: discord.Interaction, world: int):
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
                 world_status = " `[Deutsch]`"
+            case 18 | 33 | 57 | 115 | 120 | 136 | 137:
+                world_status = " `[Legacy]`"
             case _:
-                if world in free_to_play_worlds:
+                if star['world'] in free_to_play_worlds:
                     world_status = " `[Free-to-play]`"
                 else:
                     world_status = " `[Members]`"
