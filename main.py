@@ -1075,8 +1075,10 @@ async def find(interaction: discord.Interaction):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 101 | 251:
+            case 47 | 75 | 94 | 251:
                 world_status = " `[Português]`"
+            case 101:
+                world_status = " `[Português Legacy]`"
             case 55 | 118:
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
@@ -1142,8 +1144,10 @@ async def find_size(interaction: discord.Interaction, size: str):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 101 | 251:
+            case 47 | 75 | 94 | 251:
                 world_status = " `[Português]`"
+            case 101:
+                world_status = " `[Português Legacy]`"
             case 55 | 118:
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
@@ -1216,8 +1220,10 @@ async def find_region(interaction: discord.Interaction, region: str):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 101 | 251:
+            case 47 | 75 | 94 | 251:
                 world_status = " `[Português]`"
+            case 101:
+                world_status = " `[Português Legacy]`"
             case 55 | 118:
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
@@ -1278,8 +1284,10 @@ async def find_world(interaction: discord.Interaction, world: int):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 101 | 251:
+            case 47 | 75 | 94 | 251:
                 world_status = " `[Português]`"
+            case 101:
+                world_status = " `[Português Legacy]`"
             case 55 | 118:
                 world_status = " `[Français]`"
             case 102 | 121 | 122:
