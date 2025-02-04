@@ -415,6 +415,8 @@ async def clear(interaction: discord.Interaction):
         world_name = entry["world"]
         if entry["world"] in special_worlds:
             world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif entry["world"] in local_worlds and entry["world"] in free_to_play_worlds:
+            world_name = f"\u001b[32m{world_name}\u001b[0m"
         elif entry["world"] in local_worlds:
             world_name = f"\u001b[30m{world_name}\u001b[0m"
         elif entry["world"] in free_to_play_worlds:
@@ -529,6 +531,8 @@ async def clear_old(interaction: discord.Interaction):
         world_name = entry["world"]
         if entry["world"] in special_worlds:
             world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif entry["world"] in local_worlds and entry["world"] in free_to_play_worlds:
+            world_name = f"\u001b[32m{world_name}\u001b[0m"
         elif entry["world"] in local_worlds:
             world_name = f"\u001b[30m{world_name}\u001b[0m"
         elif entry["world"] in free_to_play_worlds:
@@ -667,6 +671,8 @@ async def clear_restricted(interaction: discord.Interaction):
             world_name = entry["world"]
             if entry["world"] in special_worlds:
                 world_name = f"\u001b[36m{world_name}\u001b[0m"
+            elif entry["world"] in local_worlds and entry["world"] in free_to_play_worlds:
+                world_name = f"\u001b[32m{world_name}\u001b[0m"
             elif entry["world"] in local_worlds:
                 world_name = f"\u001b[30m{world_name}\u001b[0m"
             elif entry["world"] in free_to_play_worlds:
@@ -781,6 +787,8 @@ async def prune(interaction: discord.Interaction, world: int):
         world_name = entry["world"] 
         if entry["world"] in special_worlds:
             world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif entry["world"] in local_worlds and entry["world"] in free_to_play_worlds:
+            world_name = f"\u001b[32m{world_name}\u001b[0m"
         elif entry["world"] in local_worlds:
             world_name = f"\u001b[30m{world_name}\u001b[0m"
         elif entry["world"] in free_to_play_worlds:
@@ -834,6 +842,8 @@ async def create(interaction: discord.Interaction):
         world_name = world 
         if world in special_worlds:
             world_name = f"\u001b[36m{world_name}\u001b[0m"
+        elif world in local_worlds and world in free_to_play_worlds:
+            world_name = f"\u001b[32m{world_name}\u001b[0m"
         elif world in local_worlds:
             world_name = f"\u001b[30m{world_name}\u001b[0m"
         elif world in free_to_play_worlds:
@@ -980,6 +990,8 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
                 world_name = entry["world"]
                 if entry["world"] in special_worlds:
                     world_name = f"\u001b[36m{world_name}\u001b[0m"
+                elif entry["world"] in local_worlds and entry["world"] in free_to_play_worlds:
+                    world_name = f"\u001b[32m{world_name}\u001b[0m"
                 elif entry["world"] in local_worlds:
                     world_name = f"\u001b[30m{world_name}\u001b[0m"
                 elif entry["world"] in free_to_play_worlds:
@@ -1075,16 +1087,27 @@ async def find(interaction: discord.Interaction):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 251:
+            case 47 | 75:
                 world_status = " `[Português]`"
             case 101:
                 world_status = " `[Português Legacy]`"
-            case 55 | 118:
+            case 94 | 251:
+                world_status = " `[Português F2P]`"
+            case 118:
                 world_status = " `[Français]`"
-            case 102 | 121 | 122:
+            case 55:
+                world_status = " `[Français F2P]`"
+            case 102 | 121:
                 world_status = " `[Deutsch]`"
+            case 122:
+                world_status = " `[Deutsch F2P]`"
             case 18 | 33 | 57 | 115 | 120 | 136 | 137:
                 world_status = " `[Legacy]`"
+            case _:
+                if star['world'] in free_to_play_worlds:
+                    world_status = " `[Free-to-play]`"
+                else:
+                    world_status = ""
 
         star_details.append(
             f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
@@ -1144,16 +1167,27 @@ async def find_size(interaction: discord.Interaction, size: str):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 251:
+            case 47 | 75:
                 world_status = " `[Português]`"
             case 101:
                 world_status = " `[Português Legacy]`"
-            case 55 | 118:
+            case 94 | 251:
+                world_status = " `[Português F2P]`"
+            case 118:
                 world_status = " `[Français]`"
-            case 102 | 121 | 122:
+            case 55:
+                world_status = " `[Français F2P]`"
+            case 102 | 121:
                 world_status = " `[Deutsch]`"
+            case 122:
+                world_status = " `[Deutsch F2P]`"
             case 18 | 33 | 57 | 115 | 120 | 136 | 137:
                 world_status = " `[Legacy]`"
+            case _:
+                if star['world'] in free_to_play_worlds:
+                    world_status = " `[Free-to-play]`"
+                else:
+                    world_status = " `[Members]`"
 
         star_details.append(
             f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
@@ -1220,16 +1254,28 @@ async def find_region(interaction: discord.Interaction, region: str):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 251:
+            case 47 | 75:
                 world_status = " `[Português]`"
             case 101:
                 world_status = " `[Português Legacy]`"
-            case 55 | 118:
+            case 94 | 251:
+                world_status = " `[Português F2P]`"
+            case 118:
                 world_status = " `[Français]`"
-            case 102 | 121 | 122:
+            case 55:
+                world_status = " `[Français F2P]`"
+            case 102 | 121:
                 world_status = " `[Deutsch]`"
+            case 122:
+                world_status = " `[Deutsch F2P]`"
             case 18 | 33 | 57 | 115 | 120 | 136 | 137:
                 world_status = " `[Legacy]`"
+            case _:
+                if star['world'] in free_to_play_worlds:
+                    world_status = " `[Free-to-play]`"
+                else:
+                    world_status = " `[Members]`"
+
 
         star_details.append(
             f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
@@ -1284,14 +1330,20 @@ async def find_world(interaction: discord.Interaction, world: int):
                 world_status = " `[VIP]`"
             case 86 | 114:
                 world_status = " `[1500 Total]`"
-            case 47 | 75 | 94 | 251:
+            case 47 | 75:
                 world_status = " `[Português]`"
             case 101:
                 world_status = " `[Português Legacy]`"
-            case 55 | 118:
+            case 94 | 251:
+                world_status = " `[Português F2P]`"
+            case 118:
                 world_status = " `[Français]`"
-            case 102 | 121 | 122:
+            case 55:
+                world_status = " `[Français F2P]`"
+            case 102 | 121:
                 world_status = " `[Deutsch]`"
+            case 122:
+                world_status = " `[Deutsch F2P]`"
             case 18 | 33 | 57 | 115 | 120 | 136 | 137:
                 world_status = " `[Legacy]`"
             case _:
