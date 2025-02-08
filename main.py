@@ -1193,11 +1193,26 @@ async def find_size(interaction: discord.Interaction, size: str):
             f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    await interaction.response.send_message(
-        f"Star(s) of size `{size[1:]}` called:\n" + 
-        "\n".join(star_details),
-        ephemeral=True
-    )
+    header = f"Star(s) of size `{size[1:]}` called:\n"
+    
+    DISCORD_CHAR_LIMIT = 1800
+    messages = []
+    current_message = header
+    
+    for detail in star_details:
+        if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+            messages.append(current_message)
+            current_message = header + detail + "\n"
+        else:
+            current_message += detail + "\n"
+    
+    if current_message != header:
+        messages.append(current_message)
+
+    await interaction.response.send_message(messages[0], ephemeral=True)
+    
+    for message in messages[1:]:
+        await interaction.followup.send(message, ephemeral=True)
 
 @client.tree.command(name="find-region", description="Find stars in a specific region.")
 @app_commands.describe(region="What region are you looking for stars in?")
@@ -1281,11 +1296,25 @@ async def find_region(interaction: discord.Interaction, region: str):
             f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    await interaction.response.send_message(
-        f"Star(s) called for `{region}`:\n" + 
-        "\n".join(star_details),
-        ephemeral=True
-    )
+    header = f"Star(s) called for `{region}`:\n"
+    DISCORD_CHAR_LIMIT = 1800
+    messages = []
+    current_message = header
+    
+    for detail in star_details:
+        if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+            messages.append(current_message)
+            current_message = header + detail + "\n"
+        else:
+            current_message += detail + "\n"
+    
+    if current_message != header:
+        messages.append(current_message)
+
+    await interaction.response.send_message(messages[0], ephemeral=True)
+    
+    for message in messages[1:]:
+        await interaction.followup.send(message, ephemeral=True)
 
 @client.tree.command(name="find-world", description="Find stars on a specific world.")
 @app_commands.describe(world="What world are you looking for stars in?")
