@@ -1391,4 +1391,59 @@ async def find_world(interaction: discord.Interaction, world: int):
         ephemeral=True
     )
 
+@client.tree.command(name="find-f2p", description="Find the highest size f2p stars currently in the table.")
+async def find_f2p(interaction: discord.Interaction):
+    if not table_data.get("chunk_message_ids"):
+        await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
+        return
+
+    valid_entries = [
+        entry for entry in table_data["entries"]
+        if entry['size'] != "" and
+        entry['region'] != "" and
+        entry['game_time'] != "" and
+        entry['game_time_full'] != "" and
+        is_valid_size(entry['size']) and
+        is_valid_game_time(entry['game_time']) and
+        is_valid_game_time_full(entry['game_time_full']) and
+        int(entry['world']) in free_to_play_worlds
+    ]
+
+    if not valid_entries:
+        await interaction.response.send_message("No stars have been fully called in free-to-play worlds yet.")
+        return
+
+    def extract_size(entry):
+        return int(entry['size'][1:])
+
+    max_size = max(extract_size(entry) for entry in valid_entries)
+
+    highest_stars = [
+        entry for entry in valid_entries 
+        if extract_size(entry) == max_size
+    ]
+
+    star_details = []
+    for star in highest_stars:
+        game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+        world_status = ""
+        match star['world']:
+            case 94 | 251:
+                world_status = " `[Português]`"
+            case 55:
+                world_status = " `[Français]`"
+            case 122:
+                world_status = " `[Deutsch]`"
+            case 33 | 57 | 120 | 136:
+                world_status = " `[Legacy]`"
+
+        star_details.append(
+            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+        )
+
+    await interaction.response.send_message(
+        f"Largest free-to-play star(s) called is of size `{max_size}`:\n" + 
+        "\n".join(star_details)
+    )
+
 client.run(token)
