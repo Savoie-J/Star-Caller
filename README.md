@@ -175,6 +175,14 @@
 
 ---
 
+### Find-region-f2p
+
+`/find-region-f2p region:`
+
+>Invoking this command will prompt you for a region[str], upon invocation it will return an ephemeral list of all free-to-play stars in the table corresponding to that region.
+
+---
+
 ### Find-size
 
 `/find-size size:`
@@ -182,6 +190,14 @@
 >Invoking this command will prompt you for a size[str], upon invocation it will return an ephemeral list of all stars in the table of the corresponding size.
 
 ![Find Size](images/find-size.png) ![Find Size Example](images/find-size_example.png)
+
+---
+
+### Find-size-f2p
+
+`/find-size-f2p size:`
+
+>Invoking this command will prompt you for a size[str], upon invocation it will return an ephemeral list of all free-to-play stars in the table of the corresponding size.
 
 ---
 
