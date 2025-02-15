@@ -1069,9 +1069,12 @@ async def find(interaction: discord.Interaction):
 
     max_size = max(extract_size(entry) for entry in valid_entries)
     
-    current_size = max_size
-    found_entries = []
+    found_entries = [
+        entry for entry in valid_entries 
+        if extract_size(entry) == max_size
+    ]
     
+    current_size = max_size - 1
     while len(found_entries) < 3 and current_size > 0:
         size_entries = [
             entry for entry in valid_entries 
@@ -1082,7 +1085,10 @@ async def find(interaction: discord.Interaction):
 
     found_entries.sort(key=extract_size, reverse=True)
     
-    found_entries = found_entries[:3]
+    if len(found_entries) > len([e for e in found_entries if extract_size(e) == max_size]):
+        highest_size_entries = [e for e in found_entries if extract_size(e) == max_size]
+        lower_size_entries = [e for e in found_entries if extract_size(e) != max_size]
+        found_entries = highest_size_entries + lower_size_entries[:3 - len(highest_size_entries)]
 
     star_details = []
     for star in found_entries:
