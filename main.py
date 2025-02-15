@@ -1068,14 +1068,24 @@ async def find(interaction: discord.Interaction):
         return int(entry['size'][1:])
 
     max_size = max(extract_size(entry) for entry in valid_entries)
+    
+    current_size = max_size
+    found_entries = []
+    
+    while len(found_entries) < 3 and current_size > 0:
+        size_entries = [
+            entry for entry in valid_entries 
+            if extract_size(entry) == current_size
+        ]
+        found_entries.extend(size_entries)
+        current_size -= 1
 
-    highest_stars = [
-        entry for entry in valid_entries 
-        if extract_size(entry) == max_size
-    ]
+    found_entries.sort(key=extract_size, reverse=True)
+    
+    found_entries = found_entries[:3]
 
     star_details = []
-    for star in highest_stars:
+    for star in found_entries:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         world_status = ""
         match star['world']:
@@ -1109,12 +1119,13 @@ async def find(interaction: discord.Interaction):
                 else:
                     world_status = ""
 
+        size = extract_size(star)
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"Size `{size}` in `{star['region']}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     await interaction.response.send_message(
-        f"Largest star(s) called is of size `{max_size}`:\n" + 
+        f"⁂ Notable stars found:\n" + 
         "\n".join(star_details)
     )
 
