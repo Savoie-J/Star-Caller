@@ -1068,29 +1068,18 @@ async def find(interaction: discord.Interaction):
         return int(entry['size'][1:])
 
     max_size = max(extract_size(entry) for entry in valid_entries)
+    second_max_size = max(size for size in [extract_size(entry) for entry in valid_entries] if size < max_size)
     
     found_entries = [
         entry for entry in valid_entries 
-        if extract_size(entry) == max_size
+        if extract_size(entry) in [max_size, second_max_size]
     ]
-    
-    current_size = max_size - 1
-    while len(found_entries) < 3 and current_size > 0:
-        size_entries = [
-            entry for entry in valid_entries 
-            if extract_size(entry) == current_size
-        ]
-        found_entries.extend(size_entries)
-        current_size -= 1
 
     found_entries.sort(key=extract_size, reverse=True)
-    
-    if len(found_entries) > len([e for e in found_entries if extract_size(e) == max_size]):
-        highest_size_entries = [e for e in found_entries if extract_size(e) == max_size]
-        lower_size_entries = [e for e in found_entries if extract_size(e) != max_size]
-        found_entries = highest_size_entries + lower_size_entries[:3 - len(highest_size_entries)]
 
     star_details = []
+    current_size = None
+    
     for star in found_entries:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
         world_status = ""
@@ -1126,12 +1115,16 @@ async def find(interaction: discord.Interaction):
                     world_status = ""
 
         size = extract_size(star)
+        if size != current_size:
+            star_details.append(f"\n`Size {size}:`")
+            current_size = size
+            
         star_details.append(
-            f"Size `{size}` in `{star['region']}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
         )
 
     await interaction.response.send_message(
-        f"⁂ Notable stars found:\n" + 
+        f"⁂ Notable stars found:" + 
         "\n".join(star_details)
     )
 
