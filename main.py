@@ -938,13 +938,14 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
     try:
         await interaction.response.defer()
     except (discord.NotFound, discord.HTTPException):
-        pass
-    
+        print(f"Failed to defer interaction: {e}")
+        return
+
     async with interaction.client.clear_lock:
         if not hasattr(interaction.client, 'message_queue'):
             interaction.client.message_queue = MessageQueue()
             interaction.client.message_queue.start()
-        
+
         if not table_data.get("message_id"):
             await interaction.followup.send("No table exists. Use `/create` first.", ephemeral=True)
             return
@@ -953,12 +954,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             await interaction.followup.send("Table is locked. Invoke `/unlock` to modify entries.", ephemeral=True)
             return
 
-        world_index = None
-        for i, entry in enumerate(table_data["entries"]):
-            if entry["world"] == world:
-                world_index = i
-                break
-
+        world_index = next((i for i, entry in enumerate(table_data["entries"]) if entry["world"] == world), None)
         if world_index is None:
             await interaction.followup.send(f"World `{world}` not found.", ephemeral=True)
             return
@@ -972,7 +968,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             if game_time is not None:
                 current_utc = datetime.datetime.now(pytz.UTC)
                 game_end_time = current_utc + datetime.timedelta(minutes=game_time)
-                
+
                 entry_updates["game_time"] = game_end_time.strftime("%H:%M")
                 entry_updates["game_time_full"] = game_end_time.isoformat()
                 
@@ -983,6 +979,10 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             channel = interaction.client.get_channel(table_data["channel_id"])
             if not channel:
                 await interaction.followup.send("Error: Could not find the channel.", ephemeral=True)
+                return
+
+            if datetime.datetime.now(datetime.timezone.utc) >= interaction.expires_at:
+                print(f"Interaction expired for user {interaction.user.id} - command for world {world} completed silently.")
                 return
 
             table_rows = []
@@ -998,7 +998,7 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
                     world_name = f"\u001b[33m{world_name}\u001b[0m"
                 else:
                     world_name = f"\u001b[37m{world_name}\u001b[0m"
-                
+
                 table_rows.append(
                     f"{world_name:<1} {entry['region']:<17} {entry['size']:<4} {entry['game_time']:<4}"
                 )
@@ -1008,10 +1008,18 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
             chunk_index = world_index // chunk_size
 
             message_id = table_data["chunk_message_ids"][chunk_index]
-            message = await channel.fetch_message(message_id)
+            
+            try:
+                message = await channel.fetch_message(message_id)
+            except discord.NotFound:
+                await interaction.followup.send("Error: Table segment not found. It may have been deleted.", ephemeral=True)
+                return
+
             updated_chunk = "```ansi\n" + "\n".join(chunks[chunk_index]) + "```"
             
-            await interaction.client.message_queue.queue.put((message, updated_chunk))
+            if message:
+                await interaction.client.message_queue.queue.put((message, updated_chunk))
+
             save_table_data(table_data)
 
             await interaction.followup.send(
@@ -1036,12 +1044,26 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
                     pass
 
         except discord.NotFound:
-            await interaction.followup.send("Error: Message not found.", ephemeral=True)
+            if "Unknown Webhook" in str(discord.NotFound):
+                print(f"Interaction webhook expired - command execution still continued for user {interaction.user.id}")
+                print(f"Error: {str(discord.NotFound)}")
+            elif "Unknown interaction" in str(discord.NotFound):
+                print(f"Interaction expired for user {interaction.user.id}")
+                print(f"Error: {str(discord.NotFound)}")
+            else:
+                print(f"Error: {str(discord.NotFound)}")
         except discord.HTTPException as e:
-            await interaction.followup.send(f"Error updating message: {str(e)}", ephemeral=True)
+            print(f"Error executing call command: {str(e)}")
+            try:
+                await interaction.followup.send(f"Error updating message: {str(e)}", ephemeral=True)
+            except:
+                print(f"Couldn't send error notification to user {interaction.user.id}")
         except Exception as e:
             print(f"Error executing call command: {str(e)}")
-            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+            try:
+                await interaction.user.send(f"An error occurred with your command: {str(e)}")
+            except:
+                print(f"Couldn't send error notification to user {interaction.user.id}")
 
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
@@ -1068,12 +1090,19 @@ async def find(interaction: discord.Interaction):
         return int(entry['size'][1:])
 
     max_size = max(extract_size(entry) for entry in valid_entries)
-    second_max_size = max(size for size in [extract_size(entry) for entry in valid_entries] if size < max_size)
-    
-    found_entries = [
-        entry for entry in valid_entries 
-        if extract_size(entry) in [max_size, second_max_size]
-    ]
+    smaller_sizes = [size for size in [extract_size(entry) for entry in valid_entries] if size < max_size]
+
+    if smaller_sizes:
+        second_max_size = max(smaller_sizes)
+        found_entries = [
+            entry for entry in valid_entries 
+            if extract_size(entry) in [max_size, second_max_size]
+        ]
+    else:
+        found_entries = [
+            entry for entry in valid_entries 
+            if extract_size(entry) == max_size
+        ]
 
     found_entries.sort(key=extract_size, reverse=True)
 
