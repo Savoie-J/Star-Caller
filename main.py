@@ -45,7 +45,7 @@ class StarCaller(commands.Bot):
     def cog_unload(self):
         self.auto_clear_restricted.cancel()
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(minutes=15)
     async def auto_clear_restricted(self):
         try:
             class DummyResponse:
@@ -638,11 +638,11 @@ async def clear_restricted(interaction: discord.Interaction):
         current_time = datetime.datetime.now(pytz.UTC)
         if clear_restricted.last_run is not None:
             time_diff = (current_time - clear_restricted.last_run).total_seconds() / 60
-            if time_diff < 10:
-                wait_time = round(10 - time_diff)
+            if time_diff < 5:
+                wait_time = round(5 - time_diff)
                 if is_real_interaction:
                     await interaction.followup.send(
-                        f"In order to combat abuse, this command can only be used once every 10 minutes. Please wait `{wait_time}` minutes before invoking it again."
+                        f"In order to combat abuse, this command can only be used once every 5 minutes. Please wait `{wait_time}` minutes before invoking it again."
                     )
                 return
 
@@ -1170,7 +1170,7 @@ async def find(interaction: discord.Interaction):
             current_size = size
             
         star_details.append(
-            f"World `{star['world']}` in [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
+            f"World `{star['world']}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
         )
 
     await interaction.response.send_message(
@@ -1250,7 +1250,7 @@ async def find_size(interaction: discord.Interaction, size: str):
                     world_status = " `[Members]`"
 
         star_details.append(
-            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     header = f"Star(s) of size `{size[1:]}` called:\n"
@@ -1356,7 +1356,7 @@ async def find_region(interaction: discord.Interaction, region: str):
             f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    header = f"Star(s) called for [{region}](<{get_region_url(region)}>):\n"
+    header = f"Star(s) called for `{region}`:\n"
     DISCORD_CHAR_LIMIT = 1800
     messages = []
     current_message = header
@@ -1442,7 +1442,7 @@ async def find_world(interaction: discord.Interaction, world: int):
                     world_status = " `[Members]`"
 
         star_details.append(
-            f"Size `{star['size'][1:]}` in [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"Size `{star['size'][1:]}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
@@ -1498,7 +1498,7 @@ async def find_f2p(interaction: discord.Interaction):
                 world_status = " `[Legacy]`"
 
         star_details.append(
-            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     await interaction.response.send_message(
@@ -1553,7 +1553,7 @@ async def find_size_f2p(interaction: discord.Interaction, size: str):
                 world_status = " `[Legacy]`"
                
         star_details.append(
-            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     header = f"F2P star(s) of size `{size[1:]}` called:\n"
@@ -1629,7 +1629,7 @@ async def find_region_f2p(interaction: discord.Interaction, region: str):
             f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    header = f"F2P star(s) called for [{region}](<{get_region_url(region)}>):\n"
+    header = f"F2P star(s) called for `{region}`:\n"
     DISCORD_CHAR_LIMIT = 1800
     messages = []
     current_message = header
