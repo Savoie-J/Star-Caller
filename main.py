@@ -168,6 +168,27 @@ def is_valid_game_time_full(time_str: str) -> bool:
     except (ValueError, TypeError):
         return False
 
+def get_region_url(region):
+    region_urls = {
+        "Anachronia": "https://runescape.wiki/w/Shooting_Star#Anachronia",
+        "Asgarnia": "https://runescape.wiki/w/Shooting_Star#Asgarnia",
+        "Ashdale": "https://runescape.wiki/w/Shooting_Star#Ashdale",
+        "Crandor/Karamja": "https://runescape.wiki/w/Shooting_Star#Crandor_or_Karamja",
+        "Daemonheim": "https://runescape.wiki/w/Shooting_Star#The_Daemonheim_peninsula",
+        "Feldip Hills": "https://runescape.wiki/w/Shooting_Star#The_Feldip_Hills",
+        "Frem/Lunar": "https://runescape.wiki/w/Shooting_Star#Fremennik_lands_or_Lunar_Isle",
+        "Kandarin": "https://runescape.wiki/w/Shooting_Star#Kandarin",
+        "Kharidian Desert": "https://runescape.wiki/w/Shooting_Star#The_Kharidian_Desert",
+        "Lost Grove": "https://runescape.wiki/w/Shooting_Star#The_Lost_Grove",
+        "Menaphos": "https://runescape.wiki/w/Shooting_Star#Menaphos",
+        "Misthalin": "https://runescape.wiki/w/Shooting_Star#Misthalin",
+        "Morytania/Mos": "https://runescape.wiki/w/Shooting_Star#Morytania_or_Mos_Le'Harmless",
+        "Pisc/Gnome/Tir": "https://runescape.wiki/w/Shooting_Star#Piscatoris,_the_Gnome_Stronghold_or_Tirannwn",
+        "Tuska": "https://runescape.wiki/w/Shooting_Star#Tuska",
+        "Wilderness": "https://runescape.wiki/w/Shooting_Star#The_Wilderness",
+    }
+    return region_urls.get(region, f"https://runescape.wiki/w/Shooting_Star#Locations")
+
 @client.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.errors.CheckFailure):
@@ -1149,7 +1170,7 @@ async def find(interaction: discord.Interaction):
             current_size = size
             
         star_details.append(
-            f"World `{star['world']}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
+            f"World `{star['world']}` in [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
         )
 
     await interaction.response.send_message(
@@ -1229,7 +1250,7 @@ async def find_size(interaction: discord.Interaction, size: str):
                     world_status = " `[Members]`"
 
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     header = f"Star(s) of size `{size[1:]}` called:\n"
@@ -1332,10 +1353,10 @@ async def find_region(interaction: discord.Interaction, region: str):
 
 
         star_details.append(
-            f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    header = f"Star(s) called for `{region}`:\n"
+    header = f"Star(s) called for [{region}](<{get_region_url(region)}>):\n"
     DISCORD_CHAR_LIMIT = 1800
     messages = []
     current_message = header
@@ -1421,7 +1442,7 @@ async def find_world(interaction: discord.Interaction, world: int):
                     world_status = " `[Members]`"
 
         star_details.append(
-            f"Size `{star['size'][1:]}` in `{star['region']}` <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"Size `{star['size'][1:]}` in [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
@@ -1477,7 +1498,7 @@ async def find_f2p(interaction: discord.Interaction):
                 world_status = " `[Legacy]`"
 
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     await interaction.response.send_message(
@@ -1532,7 +1553,7 @@ async def find_size_f2p(interaction: discord.Interaction, size: str):
                 world_status = " `[Legacy]`"
                
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     header = f"F2P star(s) of size `{size[1:]}` called:\n"
@@ -1605,10 +1626,10 @@ async def find_region_f2p(interaction: discord.Interaction, region: str):
                 world_status = " `[Legacy]`"
 
         star_details.append(
-            f"Size `{star['size'][1:]}` on world `{star['world']}` <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    header = f"F2P star(s) called for `{region}`:\n"
+    header = f"F2P star(s) called for [{region}](<{get_region_url(region)}>):\n"
     DISCORD_CHAR_LIMIT = 1800
     messages = []
     current_message = header
