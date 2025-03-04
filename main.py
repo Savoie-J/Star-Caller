@@ -1169,14 +1169,85 @@ async def find(interaction: discord.Interaction):
             star_details.append(f"\n`Size {size}:`")
             current_size = size
             
+        try:
+            region_link = get_region_url(star['region'])
+            region_display = f"[{star['region']}](<{region_link}>)"
+        except Exception:
+            region_display = f"`{star['region']}`"
+        
         star_details.append(
-            f"World `{star['world']}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
+            f"World `{star['world']}` in {region_display}, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
         )
 
-    await interaction.response.send_message(
-        f"⁂ Notable stars found:" + 
-        "\n".join(star_details)
-    )
+    DISCORD_CHAR_LIMIT = 1800
+    header = "⁂ Notable stars found:"
+    messages = []
+    current_message = header
+
+    message = header + "\n".join(star_details)
+    if len(message) > DISCORD_CHAR_LIMIT:
+        star_details = []
+        current_size = None
+        
+        for star in found_entries:
+            game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+            world_status = ""
+            match star['world']:
+                case 30:
+                    world_status = " `[2000 Total]`"
+                case 48:
+                    world_status = " `[2600 Total]`"
+                case 52:
+                    world_status = " `[VIP]`"
+                case 86 | 114:
+                    world_status = " `[1500 Total]`"
+                case 47 | 75:
+                    world_status = " `[Português]`"
+                case 101:
+                    world_status = " `[Português Legacy]`"
+                case 94 | 251:
+                    world_status = " `[Português F2P]`"
+                case 118:
+                    world_status = " `[Français]`"
+                case 55:
+                    world_status = " `[Français F2P]`"
+                case 102 | 121:
+                    world_status = " `[Deutsch]`"
+                case 122:
+                    world_status = " `[Deutsch F2P]`"
+                case 18 | 33 | 57 | 115 | 120 | 136 | 137:
+                    world_status = " `[Legacy]`"
+                case _:
+                    if star['world'] in free_to_play_worlds:
+                        world_status = " `[Free-to-play]`"
+                    else:
+                        world_status = ""
+
+            size = extract_size(star)
+            if size != current_size:
+                star_details.append(f"\n`Size {size}:`")
+                current_size = size
+
+            star_details.append(
+                f"World `{star['world']}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
+            )
+
+        for detail in star_details:
+            if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+                messages.append(current_message)
+                current_message = f"`Size {size}:`" + "\n" + detail + "\n"
+            else:
+                current_message += detail + "\n"
+        
+        if current_message != header:
+            messages.append(current_message)
+    else:
+        messages = [message]
+
+    await interaction.response.send_message(messages[0])
+    
+    for message in messages[1:]:
+        await interaction.followup.send(message)
 
 @client.tree.command(name="find-size", description="Find stars of a specific size.")
 @app_commands.describe(size="What size of star are you looking for?")
@@ -1250,7 +1321,7 @@ async def find_size(interaction: discord.Interaction, size: str):
                     world_status = " `[Members]`"
 
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
     header = f"Star(s) of size `{size[1:]}` called:\n"
@@ -1356,7 +1427,7 @@ async def find_region(interaction: discord.Interaction, region: str):
             f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    header = f"Star(s) called for `{region}`:\n"
+    header = f"Star(s) called for [{region}](<{get_region_url(region)}>):\n"
     DISCORD_CHAR_LIMIT = 1800
     messages = []
     current_message = header
@@ -1442,7 +1513,7 @@ async def find_world(interaction: discord.Interaction, world: int):
                     world_status = " `[Members]`"
 
         star_details.append(
-            f"Size `{star['size'][1:]}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`)."
+            f"Size `{star['size'][1:]}` in [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`)."
         )
 
     await interaction.response.send_message(
@@ -1483,6 +1554,8 @@ async def find_f2p(interaction: discord.Interaction):
         if extract_size(entry) == max_size
     ]
 
+    header = f"Largest free-to-play star(s) called is of size `{max_size}`:\n"
+    
     star_details = []
     for star in highest_stars:
         game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
@@ -1497,14 +1570,60 @@ async def find_f2p(interaction: discord.Interaction):
             case 33 | 57 | 120 | 136:
                 world_status = " `[Legacy]`"
 
+        try:
+            region_link = get_region_url(star['region'])
+            region_display = f"[{star['region']}](<{region_link}>)"
+        except Exception:
+            region_display = f"`{star['region']}`"
+        
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` {region_display}, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    await interaction.response.send_message(
-        f"Largest free-to-play star(s) called is of size `{max_size}`:\n" + 
-        "\n".join(star_details)
-    )
+    DISCORD_CHAR_LIMIT = 1800
+    message = header + "\n".join(star_details)
+
+    if len(message) > DISCORD_CHAR_LIMIT:
+        star_details = []
+        for star in highest_stars:
+            game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+            world_status = ""
+            match star['world']:
+                case 94 | 251:
+                    world_status = " `[Português]`"
+                case 55:
+                    world_status = " `[Français]`"
+                case 122:
+                    world_status = " `[Deutsch]`"
+                case 33 | 57 | 120 | 136:
+                    world_status = " `[Legacy]`"
+
+            star_details.append(
+                f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            )
+
+        message = header + "\n".join(star_details)
+
+    if len(message) > DISCORD_CHAR_LIMIT:
+        messages = []
+        current_message = header
+        
+        for detail in star_details:
+            if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+                messages.append(current_message)
+                current_message = header + detail + "\n"
+            else:
+                current_message += detail + "\n"
+        
+        if current_message != header:
+            messages.append(current_message)
+    else:
+        messages = [message]
+
+    await interaction.response.send_message(messages[0])
+    
+    for message in messages[1:]:
+        await interaction.followup.send(message)
 
 @client.tree.command(name="find-size-f2p", description="Find f2p stars of a specific size.")
 @app_commands.describe(size="What size of star are you looking for?")
@@ -1553,10 +1672,10 @@ async def find_size_f2p(interaction: discord.Interaction, size: str):
                 world_status = " `[Legacy]`"
                
         star_details.append(
-            f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            f"World `{star['world']}` [{star['region']}](<{get_region_url(star['region'])}>), <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    header = f"F2P star(s) of size `{size[1:]}` called:\n"
+    header = f"Free-to-play star(s) of size `{size[1:]}` called:\n"
     
     DISCORD_CHAR_LIMIT = 1800
     messages = []
@@ -1629,7 +1748,7 @@ async def find_region_f2p(interaction: discord.Interaction, region: str):
             f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
         )
 
-    header = f"F2P star(s) called for `{region}`:\n"
+    header = f"Free-to-play star(s) called for [{region}](<{get_region_url(region)}>):\n"
     DISCORD_CHAR_LIMIT = 1800
     messages = []
     current_message = header
