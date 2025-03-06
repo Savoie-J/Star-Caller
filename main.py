@@ -958,7 +958,7 @@ async def create(interaction: discord.Interaction):
 async def call(interaction: discord.Interaction, world: int, region: str, size: str, game_time: app_commands.Range[int, 1, 128]):
     try:
         await interaction.response.defer()
-    except (discord.NotFound, discord.HTTPException):
+    except (discord.NotFound, discord.HTTPException) as e:
         print(f"Failed to defer interaction: {e}")
         return
 
@@ -1064,15 +1064,15 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
                     #print(f"API Data: {response_data}")
                     pass
 
-        except discord.NotFound:
-            if "Unknown Webhook" in str(discord.NotFound):
+        except discord.NotFound as e:
+            if "Unknown Webhook" in str(e):
                 print(f"Interaction webhook expired - command execution still continued for user {interaction.user.id}")
-                print(f"Error: {str(discord.NotFound)}")
-            elif "Unknown interaction" in str(discord.NotFound):
+                print(f"Error: {str(e)}")
+            elif "Unknown interaction" in str(e):
                 print(f"Interaction expired for user {interaction.user.id}")
-                print(f"Error: {str(discord.NotFound)}")
+                print(f"Error: {str(e)}")
             else:
-                print(f"Error: {str(discord.NotFound)}")
+                print(f"Error: {str(e)}")
         except discord.HTTPException as e:
             print(f"Error executing call command: {str(e)}")
             try:
@@ -1088,104 +1088,48 @@ async def call(interaction: discord.Interaction, world: int, region: str, size: 
 
 @client.tree.command(name="find", description="Find the highest size stars currently in the table.")
 async def find(interaction: discord.Interaction):
-    if not table_data.get("chunk_message_ids"):
-        await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
-        return
-
-    valid_entries = [
-        entry for entry in table_data["entries"]
-        if entry['size'] != "" and
-        entry['region'] != "" and
-        entry['game_time'] != "" and
-        entry['game_time_full'] != "" and
-        is_valid_size(entry['size']) and
-        is_valid_game_time(entry['game_time']) and
-        is_valid_game_time_full(entry['game_time_full'])
-    ]
-
-    if not valid_entries:
-        await interaction.response.send_message("No stars have been fully called yet.")
-        return
-
-    def extract_size(entry):
-        return int(entry['size'][1:])
-
-    max_size = max(extract_size(entry) for entry in valid_entries)
-    smaller_sizes = [size for size in [extract_size(entry) for entry in valid_entries] if size < max_size]
-
-    if smaller_sizes:
-        second_max_size = max(smaller_sizes)
-        found_entries = [
-            entry for entry in valid_entries 
-            if extract_size(entry) in [max_size, second_max_size]
-        ]
-    else:
-        found_entries = [
-            entry for entry in valid_entries 
-            if extract_size(entry) == max_size
-        ]
-
-    found_entries.sort(key=extract_size, reverse=True)
-
-    star_details = []
-    current_size = None
-    
-    for star in found_entries:
-        game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
-        world_status = ""
-        match star['world']:
-            case 30:
-                world_status = " `[2000 Total]`"
-            case 48:
-                world_status = " `[2600 Total]`"
-            case 52:
-                world_status = " `[VIP]`"
-            case 86 | 114:
-                world_status = " `[1500 Total]`"
-            case 47 | 75:
-                world_status = " `[Português]`"
-            case 101:
-                world_status = " `[Português Legacy]`"
-            case 94 | 251:
-                world_status = " `[Português F2P]`"
-            case 118:
-                world_status = " `[Français]`"
-            case 55:
-                world_status = " `[Français F2P]`"
-            case 102 | 121:
-                world_status = " `[Deutsch]`"
-            case 122:
-                world_status = " `[Deutsch F2P]`"
-            case 18 | 33 | 57 | 115 | 120 | 136 | 137:
-                world_status = " `[Legacy]`"
-            case _:
-                if star['world'] in free_to_play_worlds:
-                    world_status = " `[Free-to-play]`"
-                else:
-                    world_status = ""
-
-        size = extract_size(star)
-        if size != current_size:
-            star_details.append(f"\n`Size {size}:`")
-            current_size = size
-            
-        try:
-            region_link = get_region_url(star['region'])
-            region_display = f"[{star['region']}](<{region_link}>)"
-        except Exception:
-            region_display = f"`{star['region']}`"
+    try:
+        await interaction.response.defer()
         
-        star_details.append(
-            f"World `{star['world']}` in {region_display}, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
-        )
+        if not table_data.get("chunk_message_ids"):
+            await interaction.followup.send("Table does not exist. Use `/create` first.", ephemeral=True)
+            return
 
-    DISCORD_CHAR_LIMIT = 1800
-    header = "⁂ Notable stars found:"
-    messages = []
-    current_message = header
+        valid_entries = [
+            entry for entry in table_data["entries"]
+            if entry['size'] != "" and
+            entry['region'] != "" and
+            entry['game_time'] != "" and
+            entry['game_time_full'] != "" and
+            is_valid_size(entry['size']) and
+            is_valid_game_time(entry['game_time']) and
+            is_valid_game_time_full(entry['game_time_full'])
+        ]
 
-    message = header + "\n".join(star_details)
-    if len(message) > DISCORD_CHAR_LIMIT:
+        if not valid_entries:
+            await interaction.followup.send("No stars have been fully called yet.")
+            return
+
+        def extract_size(entry):
+            return int(entry['size'][1:])
+
+        max_size = max(extract_size(entry) for entry in valid_entries)
+        smaller_sizes = [size for size in [extract_size(entry) for entry in valid_entries] if size < max_size]
+
+        if smaller_sizes:
+            second_max_size = max(smaller_sizes)
+            found_entries = [
+                entry for entry in valid_entries 
+                if extract_size(entry) in [max_size, second_max_size]
+            ]
+        else:
+            found_entries = [
+                entry for entry in valid_entries 
+                if extract_size(entry) == max_size
+            ]
+
+        found_entries.sort(key=extract_size, reverse=True)
+
         star_details = []
         current_size = None
         
@@ -1227,27 +1171,93 @@ async def find(interaction: discord.Interaction):
             if size != current_size:
                 star_details.append(f"\n`Size {size}:`")
                 current_size = size
-
+                
+            try:
+                region_link = get_region_url(star['region'])
+                region_display = f"[{star['region']}](<{region_link}>)"
+            except Exception:
+                region_display = f"`{star['region']}`"
+            
             star_details.append(
-                f"World `{star['world']}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
+                f"World `{star['world']}` in {region_display}, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
             )
 
-        for detail in star_details:
-            if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
-                messages.append(current_message)
-                current_message = f"`Size {size}:`" + "\n" + detail + "\n"
-            else:
-                current_message += detail + "\n"
-        
-        if current_message != header:
-            messages.append(current_message)
-    else:
-        messages = [message]
+        DISCORD_CHAR_LIMIT = 1800
+        header = "⁂ Notable stars found:"
+        messages = []
+        current_message = header
 
-    await interaction.response.send_message(messages[0])
-    
-    for message in messages[1:]:
-        await interaction.followup.send(message)
+        message = header + "\n".join(star_details)
+        if len(message) > DISCORD_CHAR_LIMIT:
+            star_details = []
+            current_size = None
+            
+            for star in found_entries:
+                game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+                world_status = ""
+                match star['world']:
+                    case 30:
+                        world_status = " `[2000 Total]`"
+                    case 48:
+                        world_status = " `[2600 Total]`"
+                    case 52:
+                        world_status = " `[VIP]`"
+                    case 86 | 114:
+                        world_status = " `[1500 Total]`"
+                    case 47 | 75:
+                        world_status = " `[Português]`"
+                    case 101:
+                        world_status = " `[Português Legacy]`"
+                    case 94 | 251:
+                        world_status = " `[Português F2P]`"
+                    case 118:
+                        world_status = " `[Français]`"
+                    case 55:
+                        world_status = " `[Français F2P]`"
+                    case 102 | 121:
+                        world_status = " `[Deutsch]`"
+                    case 122:
+                        world_status = " `[Deutsch F2P]`"
+                    case 18 | 33 | 57 | 115 | 120 | 136 | 137:
+                        world_status = " `[Legacy]`"
+                    case _:
+                        if star['world'] in free_to_play_worlds:
+                            world_status = " `[Free-to-play]`"
+                        else:
+                            world_status = ""
+
+                size = extract_size(star)
+                if size != current_size:
+                    star_details.append(f"\n`Size {size}:`")
+                    current_size = size
+
+                star_details.append(
+                    f"World `{star['world']}` in `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`){world_status}"
+                )
+
+            for detail in star_details:
+                if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+                    messages.append(current_message)
+                    current_message = f"`Size {size}:`" + "\n" + detail + "\n"
+                else:
+                    current_message += detail + "\n"
+            
+            if current_message != header:
+                messages.append(current_message)
+        else:
+            messages = [message]
+
+        await interaction.followup.send(messages[0])
+        
+        for message in messages[1:]:
+            await interaction.followup.send(message)
+            
+    except Exception as e:
+        print(f"Error in find command: {e}")
+        try:
+            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        except:
+            print(f"Couldn't send error notification to user {interaction.user.id}")
 
 @client.tree.command(name="find-size", description="Find stars of a specific size.")
 @app_commands.describe(size="What size of star are you looking for?")
@@ -1524,66 +1534,40 @@ async def find_world(interaction: discord.Interaction, world: int):
 
 @client.tree.command(name="find-f2p", description="Find the highest size f2p stars currently in the table.")
 async def find_f2p(interaction: discord.Interaction):
-    if not table_data.get("chunk_message_ids"):
-        await interaction.response.send_message("Table does not exist. Use `/create` first.", ephemeral=True)
-        return
-
-    valid_entries = [
-        entry for entry in table_data["entries"]
-        if entry['size'] != "" and
-        entry['region'] != "" and
-        entry['game_time'] != "" and
-        entry['game_time_full'] != "" and
-        is_valid_size(entry['size']) and
-        is_valid_game_time(entry['game_time']) and
-        is_valid_game_time_full(entry['game_time_full']) and
-        int(entry['world']) in free_to_play_worlds
-    ]
-
-    if not valid_entries:
-        await interaction.response.send_message("No stars have been fully called in free-to-play worlds yet.")
-        return
-
-    def extract_size(entry):
-        return int(entry['size'][1:])
-
-    max_size = max(extract_size(entry) for entry in valid_entries)
-
-    highest_stars = [
-        entry for entry in valid_entries 
-        if extract_size(entry) == max_size
-    ]
-
-    header = f"Largest free-to-play star(s) called is of size `{max_size}`:\n"
-    
-    star_details = []
-    for star in highest_stars:
-        game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
-        world_status = ""
-        match star['world']:
-            case 94 | 251:
-                world_status = " `[Português]`"
-            case 55:
-                world_status = " `[Français]`"
-            case 122:
-                world_status = " `[Deutsch]`"
-            case 33 | 57 | 120 | 136:
-                world_status = " `[Legacy]`"
-
-        try:
-            region_link = get_region_url(star['region'])
-            region_display = f"[{star['region']}](<{region_link}>)"
-        except Exception:
-            region_display = f"`{star['region']}`"
+    try:
+        await interaction.response.defer()
         
-        star_details.append(
-            f"World `{star['world']}` {region_display}, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
-        )
-
-    DISCORD_CHAR_LIMIT = 1800
-    message = header + "\n".join(star_details)
-
-    if len(message) > DISCORD_CHAR_LIMIT:
+        if not table_data.get("chunk_message_ids"):
+            await interaction.followup.send("Table does not exist. Use `/create` first.", ephemeral=True)
+            return
+            
+        valid_entries = [
+            entry for entry in table_data["entries"]
+            if entry['size'] != "" and
+            entry['region'] != "" and
+            entry['game_time'] != "" and
+            entry['game_time_full'] != "" and
+            is_valid_size(entry['size']) and
+            is_valid_game_time(entry['game_time']) and
+            is_valid_game_time_full(entry['game_time_full']) and
+            int(entry['world']) in free_to_play_worlds
+        ]
+        
+        if not valid_entries:
+            await interaction.followup.send("No stars have been fully called in free-to-play worlds yet.")
+            return
+            
+        def extract_size(entry):
+            return int(entry['size'][1:])
+            
+        max_size = max(extract_size(entry) for entry in valid_entries)
+        highest_stars = [
+            entry for entry in valid_entries
+            if extract_size(entry) == max_size
+        ]
+        
+        header = f"Largest free-to-play star(s) called is of size `{max_size}`:\n"
+       
         star_details = []
         for star in highest_stars:
             game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
@@ -1597,33 +1581,64 @@ async def find_f2p(interaction: discord.Interaction):
                     world_status = " `[Deutsch]`"
                 case 33 | 57 | 120 | 136:
                     world_status = " `[Legacy]`"
-
+            try:
+                region_link = get_region_url(star['region'])
+                region_display = f"[{star['region']}](<{region_link}>)"
+            except Exception:
+                region_display = f"`{star['region']}`"
+           
             star_details.append(
-                f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+                f"World `{star['world']}` {region_display}, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
             )
-
+            
+        DISCORD_CHAR_LIMIT = 1800
         message = header + "\n".join(star_details)
-
-    if len(message) > DISCORD_CHAR_LIMIT:
-        messages = []
-        current_message = header
-        
-        for detail in star_details:
-            if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+        if len(message) > DISCORD_CHAR_LIMIT:
+            star_details = []
+            for star in highest_stars:
+                game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+                world_status = ""
+                match star['world']:
+                    case 94 | 251:
+                        world_status = " `[Português]`"
+                    case 55:
+                        world_status = " `[Français]`"
+                    case 122:
+                        world_status = " `[Deutsch]`"
+                    case 33 | 57 | 120 | 136:
+                        world_status = " `[Legacy]`"
+                star_details.append(
+                    f"World `{star['world']}` `{star['region']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+                )
+            message = header + "\n".join(star_details)
+            
+        if len(message) > DISCORD_CHAR_LIMIT:
+            messages = []
+            current_message = header
+           
+            for detail in star_details:
+                if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+                    messages.append(current_message)
+                    current_message = header + detail + "\n"
+                else:
+                    current_message += detail + "\n"
+           
+            if current_message != header:
                 messages.append(current_message)
-                current_message = header + detail + "\n"
-            else:
-                current_message += detail + "\n"
-        
-        if current_message != header:
-            messages.append(current_message)
-    else:
-        messages = [message]
-
-    await interaction.response.send_message(messages[0])
-    
-    for message in messages[1:]:
-        await interaction.followup.send(message)
+        else:
+            messages = [message]
+            
+        await interaction.followup.send(messages[0])
+       
+        for message in messages[1:]:
+            await interaction.followup.send(message)
+            
+    except Exception as e:
+        print(f"Error in find_f2p command: {e}")
+        try:
+            await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        except:
+            print(f"Couldn't send error notification to user {interaction.user.id}")
 
 @client.tree.command(name="find-size-f2p", description="Find f2p stars of a specific size.")
 @app_commands.describe(size="What size of star are you looking for?")
