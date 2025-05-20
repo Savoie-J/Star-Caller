@@ -1361,10 +1361,7 @@ async def find_size(interaction: discord.Interaction, size: str):
     except Exception as e:
         print(f"Error in find_size command for size {size}: {str(e)}")
         try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("An error occurred while processing your command.", ephemeral=True)
-            else:
-                await interaction.followup.send("An error occurred while processing your command.", ephemeral=True)
+            await interaction.followup.send("An error occurred while processing your command.", ephemeral=True)
         except Exception as follow_up_error:
             print(f"Failed to send error message: {str(follow_up_error)}")
 
@@ -1475,10 +1472,7 @@ async def find_region(interaction: discord.Interaction, region: str):
     except Exception as e:
         print(f"Error in find_region command for region {region}: {str(e)}")
         try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("An error occurred while processing your command.", ephemeral=True)
-            else:
-                await interaction.followup.send("An error occurred while processing your command.", ephemeral=True)
+            await interaction.followup.send("An error occurred while processing your command.", ephemeral=True)
         except Exception as follow_up_error:
             print(f"Failed to send error message: {str(follow_up_error)}")
 
@@ -1743,10 +1737,7 @@ async def find_size_f2p(interaction: discord.Interaction, size: str):
         print(f"Error in find_size_f2p: {e}")
         try:
             error_message = f"An error occurred while processing your request: {str(e)}"
-            if interaction.response.is_done():
-                await interaction.followup.send(error_message, ephemeral=True)
-            else:
-                await interaction.response.send_message(error_message, ephemeral=True)
+            await interaction.followup.send(error_message, ephemeral=True)
         except Exception as followup_error:
             print(f"Failed to send error message: {followup_error}")
 
@@ -1827,10 +1818,7 @@ async def find_region_f2p(interaction: discord.Interaction, region: str):
     except Exception as e:
         print(f"Error in find_region_f2p command for region {region}: {str(e)}")
         try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("An error occurred while processing your command.", ephemeral=True)
-            else:
-                await interaction.followup.send("An error occurred while processing your command.", ephemeral=True)
+            await interaction.followup.send("An error occurred while processing your command.", ephemeral=True)
         except Exception as follow_up_error:
             print(f"Failed to send error message: {str(follow_up_error)}")
 
@@ -1838,28 +1826,24 @@ async def find_region_f2p(interaction: discord.Interaction, region: str):
 async def starstruck(interaction: discord.Interaction):
     try:
         await interaction.response.defer(ephemeral=False)
-        
+       
         if not table_data.get("chunk_message_ids"):
             await interaction.followup.send("Table does not exist. Use `/create` first.")
             return
-
         region = "Feldip Hills"
-
         valid_entries = [
-            entry for entry in table_data["entries"] 
-            if entry['region'] == region and 
-            entry['size'] != "" and 
+            entry for entry in table_data["entries"]
+            if entry['region'] == region and
+            entry['size'] != "" and
             entry['game_time'] != "" and
             entry['game_time_full'] != "" and
             is_valid_size(entry['size']) and
             is_valid_game_time(entry['game_time']) and
             is_valid_game_time_full(entry['game_time_full'])
         ]
-
         if not valid_entries:
-            await interaction.response.send_message(f"No stars in Feldip Hills, for the starstruck achievement have been fully called yet.", ephemeral=True)
+            await interaction.followup.send(f"No stars in Feldip Hills, for the starstruck achievement have been fully called yet.")
             return
-
         star_details = []
         for star in valid_entries:
             game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
@@ -1894,38 +1878,31 @@ async def starstruck(interaction: discord.Interaction):
                         world_status = " `[Free-to-play]`"
                     else:
                         world_status = " `[Members]`"
-
             star_details.append(
                 f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
             )
-
         header = f"Star(s) called for the [Starstruck](<https://runescape.wiki/w/Starstruck>) achievement in [Feldip Hills](<{get_region_url('Feldip Hills')}>):\n"
         DISCORD_CHAR_LIMIT = 1800
         messages = []
         current_message = header
-        
+       
         for detail in star_details:
             if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
                 messages.append(current_message)
                 current_message = header + detail + "\n"
             else:
                 current_message += detail + "\n"
-        
+       
         if current_message != header:
             messages.append(current_message)
-
         await interaction.followup.send(messages[0])
-        
+       
         for message in messages[1:]:
             await interaction.followup.send(message)
-
     except Exception as e:
         print(f"Error in starstruck command: {str(e)}")
         try:
-            if not interaction.response.is_done():
-                await interaction.response.send_message("An error occurred while processing your command.", ephemeral=True)
-            else:
-                await interaction.followup.send("An error occurred while processing your command.")
+            await interaction.followup.send("An error occurred while processing your command.")
         except Exception as follow_up_error:
             print(f"Failed to send error message: {str(follow_up_error)}")
 
