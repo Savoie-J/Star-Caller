@@ -1906,4 +1906,73 @@ async def starstruck(interaction: discord.Interaction):
         except Exception as follow_up_error:
             print(f"Failed to send error message: {str(follow_up_error)}")
 
+@client.tree.command(name="starstruck-f2p", description="Find f2p stars in Crandor/Karamja.")
+async def starstruck_f2p(interaction: discord.Interaction):
+    try:
+        await interaction.response.defer(ephemeral=False)
+       
+        if not table_data.get("chunk_message_ids"):
+            await interaction.followup.send("Table does not exist. Use `/create` first.", ephemeral=False)
+            return
+           
+        valid_entries = [
+            entry for entry in table_data["entries"]
+            if entry['region'] == "Crandor/Karamja" and
+               entry['size'] != "" and
+               entry['game_time'] != "" and
+               entry['game_time_full'] != "" and
+               is_valid_size(entry['size']) and
+               is_valid_game_time(entry['game_time']) and
+               is_valid_game_time_full(entry['game_time_full']) and
+               int(entry['world']) in free_to_play_worlds
+        ]
+       
+        if not valid_entries:
+            await interaction.followup.send(f"No stars in `Crandor/Karamja` have been fully called yet.", ephemeral=False)
+            return
+           
+        star_details = []
+        for star in valid_entries:
+            game_time_unix = int(datetime.datetime.fromisoformat(star['game_time_full']).timestamp())
+            world_status = ""
+            match star['world']:
+                case 94 | 251:
+                    world_status = " `[Português]`"
+                case 55:
+                    world_status = " `[Français]`"
+                case 122:
+                    world_status = " `[Deutsch]`"
+                case 33 | 57 | 120 | 136:
+                    world_status = " `[Legacy]`"
+            star_details.append(
+                f"Size `{star['size'][1:]}` on world `{star['world']}`, <t:{game_time_unix}:R> (`{star['game_time']}`).{world_status}"
+            )
+           
+        header = f"Free-to-play star(s) called for the [Starstruck](<https://runescape.wiki/w/Starstruck>) achievement in [Crandor/Karamja](<{get_region_url('Crandor/Karamja')}>):\n"
+        DISCORD_CHAR_LIMIT = 1800
+        messages = []
+        current_message = header
+       
+        for detail in star_details:
+            if len(current_message + detail + "\n") > DISCORD_CHAR_LIMIT:
+                messages.append(current_message)
+                current_message = header + detail + "\n"
+            else:
+                current_message += detail + "\n"
+       
+        if current_message != header:
+            messages.append(current_message)
+           
+        await interaction.followup.send(messages[0], ephemeral=False)
+       
+        for message in messages[1:]:
+            await interaction.followup.send(message, ephemeral=False)
+           
+    except Exception as e:
+        print(f"Error in starstruck_f2p command: {str(e)}")
+        try:
+            await interaction.followup.send("An error occurred while processing your command.", ephemeral=False)
+        except Exception as follow_up_error:
+            print(f"Failed to send error message: {str(follow_up_error)}")
+
 client.run(token)
