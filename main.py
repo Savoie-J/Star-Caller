@@ -1842,7 +1842,7 @@ async def starstruck(interaction: discord.Interaction):
             is_valid_game_time_full(entry['game_time_full'])
         ]
         if not valid_entries:
-            await interaction.followup.send(f"No stars in Feldip Hills, for the starstruck achievement have been fully called yet.")
+            await interaction.followup.send(f"No stars in `Feldip Hills`, for the starstruck achievement have been fully called yet.")
             return
         star_details = []
         for star in valid_entries:
@@ -1928,7 +1928,7 @@ async def starstruck_f2p(interaction: discord.Interaction):
         ]
        
         if not valid_entries:
-            await interaction.followup.send(f"No stars in `Crandor/Karamja` have been fully called yet.", ephemeral=False)
+            await interaction.followup.send(f"No free-to-play stars in `Crandor/Karamja`, for the starstruck achievement have been fully called yet.", ephemeral=False)
             return
            
         star_details = []
